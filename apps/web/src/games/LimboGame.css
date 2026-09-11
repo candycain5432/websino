@@ -1,0 +1,57 @@
+.limbo { display: grid; gap: var(--space-3); justify-items: center; }
+
+.limbo__result {
+  font-size: clamp(2.5rem, 12vw, 6rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  color: var(--text-dim);
+  animation: limbo-pop var(--dur-slow) var(--ease-out-back);
+}
+.limbo__result.is-win  { color: var(--win);  text-shadow: var(--glow-win); }
+.limbo__result.is-loss { color: var(--lose); text-shadow: var(--glow-lose); }
+
+@keyframes limbo-pop {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+.limbo__caption { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+
+.limbo__controls { display: grid; gap: var(--space-3); }
+
+.limbo__label {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.limbo__label strong { color: var(--gold); }
+
+.limbo__input {
+  inline-size: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-sm);
+  background: var(--bg-deep);
+  color: var(--gold);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  text-align: end;
+}
+
+.limbo__presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-2); }
+.limbo__preset { padding: var(--space-2); font-size: var(--text-xs); }
+.limbo__preset.is-active { border-color: var(--gold); color: var(--gold-bright); }
+
+.limbo__stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin: 0; }
+.limbo__stats div { padding: var(--space-2); border-radius: var(--radius-sm); background: var(--bg-deep); text-align: center; }
+.limbo__stats dt { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.limbo__stats dd { margin: 2px 0 0; font-size: var(--text-sm); font-weight: 700; }
+
+.limbo__error { margin: 0; color: var(--lose); font-size: var(--text-xs); }
+
+.limbo__play { inline-size: 100%; font-size: var(--text-lg); padding: var(--space-4); }

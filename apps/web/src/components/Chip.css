@@ -1,0 +1,56 @@
+/*
+ * A casino chip.
+ *
+ * pysino drew the six-wedge rim as six polygons every time it rendered one. Here it is
+ * a single repeating-conic-gradient, which is sharper, scales to any size, and costs
+ * nothing to animate.
+ */
+
+.chip {
+  --chip-size: 48px;
+  --chip-face: var(--chip-25);
+  --chip-edge: var(--chip-25-edge);
+  --chip-ink: var(--text);
+
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--chip-size);
+  block-size: var(--chip-size);
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(
+      var(--chip-edge) 0deg 30deg,
+      color-mix(in srgb, var(--chip-face) 55%, #fff) 30deg 60deg
+    );
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px rgb(0 0 0 / 25%);
+  transition: transform var(--dur) var(--ease-out-back);
+  flex: none;
+}
+
+.chip__face {
+  display: grid;
+  place-items: center;
+  inline-size: 74%;
+  block-size: 74%;
+  border-radius: 50%;
+  background: var(--chip-face);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--chip-face) 60%, #000);
+  color: var(--chip-ink);
+  font-size: calc(var(--chip-size) * 0.28);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.chip--selected {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow), var(--glow-gold), inset 0 0 0 1px rgb(0 0 0 / 25%);
+}
+
+.chip--1    { --chip-face: var(--chip-1);    --chip-edge: var(--chip-1-edge);    --chip-ink: var(--ink); }
+.chip--5    { --chip-face: var(--chip-5);    --chip-edge: var(--chip-5-edge); }
+.chip--25   { --chip-face: var(--chip-25);   --chip-edge: var(--chip-25-edge); }
+.chip--100  { --chip-face: var(--chip-100);  --chip-edge: var(--chip-100-edge); }
+.chip--500  { --chip-face: var(--chip-500);  --chip-edge: var(--chip-500-edge); }
+.chip--2500 { --chip-face: var(--chip-2500); --chip-edge: var(--chip-2500-edge); --chip-ink: var(--ink); }

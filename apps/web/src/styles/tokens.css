@@ -1,0 +1,124 @@
+/**
+ * Design tokens.
+ *
+ * The palette is ported verbatim from pysino's core/theme.py - deep green felt and
+ * gold is a genuinely good identity, it was just rendered crudely by a 1280x720
+ * blitted canvas. Same colours, executed with real depth, type and motion.
+ */
+
+:root {
+  /* ---------------------------------------------------------------- surfaces */
+  --bg-deep: #08100d;
+  --bg-raised: #101c17;
+  --felt: #165c42;
+  --felt-dark: #0c3627;
+  --felt-light: #227656;
+  --wood: #4a2f1c;
+  --wood-light: #6c472c;
+
+  --panel: #13221c;
+  --panel-light: #1e3229;
+  --panel-edge: #2e4a3d;
+
+  /* ------------------------------------------------------------------ accent */
+  --gold: #d4af37;
+  --gold-dim: #8a7028;
+  --gold-bright: #f7e080;
+  --silver: #c4cace;
+
+  /* -------------------------------------------------------------------- text */
+  --text: #eeeade;
+  --text-dim: #96a49c;
+  --text-muted: #68766e;
+  --ink: #101214;
+
+  /* ------------------------------------------------------------------ status */
+  --win: #5ec878;
+  --lose: #e24a44;
+  --push: #d8b048;
+  --info: #569ad6;
+  --warn: #e88e3a;
+  --purple: #8c68d0;
+
+  /* ------------------------------------------------------------------- cards */
+  --card-face: #f8f6f0;
+  --card-edge: #cecabe;
+  --card-red: #c4262e;
+  --card-black: #1c1e22;
+  --card-back: #801e26;
+  --card-back-dark: #54121a;
+
+  /* ------------------------------------------------------------------- chips */
+  --chip-1: #eeeeea;
+  --chip-1-edge: #a8a8a2;
+  --chip-5: #c63434;
+  --chip-5-edge: #801c1c;
+  --chip-25: #268c56;
+  --chip-25-edge: #145c38;
+  --chip-100: #222428;
+  --chip-100-edge: #56585e;
+  --chip-500: #7648b0;
+  --chip-500-edge: #4a2a76;
+  --chip-2500: #e29e28;
+  --chip-2500-edge: #9a6414;
+
+  /* --------------------------------------------------------------- typography */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* Tabular figures stop balances and multipliers from jittering as they tick. */
+  --nums: 'tnum' 1, 'lnum' 1;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.5rem;
+  --text-3xl: 4rem;
+
+  /* ------------------------------------------------------------------ layout */
+  --radius-sm: 6px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  /* ------------------------------------------------------------------ depth */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow: 0 4px 12px rgb(0 0 0 / 45%), 0 1px 2px rgb(0 0 0 / 30%);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 55%), 0 2px 6px rgb(0 0 0 / 35%);
+  --glow-gold: 0 0 24px rgb(212 175 55 / 28%);
+  --glow-win: 0 0 28px rgb(94 200 120 / 35%);
+  --glow-lose: 0 0 28px rgb(226 74 68 / 30%);
+
+  /* ------------------------------------------------------------------ motion */
+  /* The nine easings from pysino's anim.py are standard Penner curves. */
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 420ms;
+}
+
+/* Respect people who would rather things did not fly around. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
