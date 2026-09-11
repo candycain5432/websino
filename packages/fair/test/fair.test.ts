@@ -147,7 +147,10 @@ describe('randBelow', () => {
     const s = stream('bias');
     const counts = new Array<number>(37).fill(0);
     const trials = 185_000; // 5000 expected per pocket
-    for (let i = 0; i < trials; i += 1) counts[s.randBelow(37)] += 1;
+    for (let i = 0; i < trials; i += 1) {
+      const pocket = s.randBelow(37);
+      counts[pocket] = (counts[pocket] ?? 0) + 1;
+    }
 
     const expected = trials / 37;
     // Chi-square with 36 degrees of freedom: 99.9th percentile is ~67.98.
@@ -184,7 +187,8 @@ describe('shuffle and sample', () => {
     for (let n = 0; n < 16_000; n += 1) {
       const shuffled = stream('spread', n).shuffle(deck);
       shuffled.forEach((card, position) => {
-        counts[position]![card] += 1;
+        const row = counts[position] as number[];
+        row[card] = (row[card] ?? 0) + 1;
       });
     }
     const expected = 16_000 / 8;
