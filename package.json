@@ -9,12 +9,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @websino/web build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm -r typecheck",
-    "lint": "eslint .",
-    "format": "prettier --write ."
+    "dev": "pnpm -r --parallel dev",
+    "build:offline": "pnpm --filter @websino/web build:offline",
+    "verify": "pnpm -r typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

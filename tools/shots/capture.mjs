@@ -32,7 +32,7 @@ const CHROME = process.env.WEBSINO_CHROME ?? '/opt/pw-browsers/chromium-1194/chr
 const browser = await chromium.launch(
   existsSync(CHROME) ? { executablePath: CHROME } : {},
 );
-const page = await browser.newPage({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: Number(process.env.WEBSINO_DPR ?? 2) });
 
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
