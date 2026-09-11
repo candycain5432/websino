@@ -107,7 +107,8 @@ export function evaluate(cards: readonly Card[]): HandRank {
   for (const card of cards) {
     const r = rankOf(card);
     rankCounts.set(r, (rankCounts.get(r) ?? 0) + 1);
-    suitCounts[suitOf(card)] += 1;
+    const s = suitOf(card);
+    suitCounts[s] = (suitCounts[s] ?? 0) + 1;
   }
 
   const flushSuit = suitCounts.findIndex((n) => n >= 5);
