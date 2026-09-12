@@ -12,6 +12,7 @@ export {
   SCATTER, WILD, SCATTER_PAYS, FREE_SPIN_AWARD, FREE_SPIN_MULTIPLIER, type SlotSymbol,
 } from './games/slots/reels.js';
 export * as blackjack from './games/blackjack/index.js';
+export * as holdem from './games/holdem/index.js';
 export * as mines from './games/mines/index.js';
 export * as videopoker from './games/videopoker/index.js';
 export {

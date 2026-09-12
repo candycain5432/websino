@@ -54,6 +54,7 @@ if (out) await page.screenshot({ path: `${out}/offline.png` });
 for (const [game, action] of [
   ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
+  ["Hold'em", 'Sit down for 500'],
 ]) {
   await page.getByRole('button', { name: /lobby/i }).click();
   await page.waitForTimeout(250);

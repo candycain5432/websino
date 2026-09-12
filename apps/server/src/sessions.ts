@@ -19,10 +19,11 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { createCasualSource } from '@websino/fair';
 import {
-  assertValidBet, blackjack, crash, mines, shuffleShoe, videopoker,
-  type BlackjackView, type CrashView, type MinesView, type ShoeState,
-  type VideoPokerView,
+  assertValidBet, blackjack, crash, holdem, mines, shuffleShoe, videopoker,
+  type BlackjackView, type CrashView, type HoldemSeatView, type HoldemView,
+  type MinesView, type ShoeState, type VideoPokerView,
 } from '@websino/engine';
 
 import type { Db } from './db/index.js';
@@ -613,4 +614,219 @@ export function videoPokerStatus(db: Db, userId: string): VideoPokerView | null 
   const row = openSession(db, userId, 'videopoker');
   if (!row) return null;
   return videoPokerView(db, userId, row, JSON.parse(row.state_json) as VideoPokerState);
+}
+
+// --------------------------------------------------------------------- hold'em --
+
+interface HoldemState {
+  table: holdem.HoldemTable;
+  /** The seat the account is sitting in. Always 0 for now; explicit for the future. */
+  you: number;
+  /** Chips bought in with, so leaving can only ever return what was debited. */
+  buyIn: number;
+  /** Casual RNG seed for the bots - never the fair stream. */
+  botSeed: number;
+}
+
+export const HOLDEM_BOTS = 3;
+export const HOLDEM_BOT_STACK = 2_000;
+
+/**
+ * Bots' hole cards are absent from the payload until they are shown at a showdown.
+ *
+ * That is the whole game. Sending them and asking the UI not to look would let anyone
+ * with the network tab open play perfectly, so the redaction lives here rather than in
+ * the client.
+ */
+function holdemView(db: Db, userId: string, row: SessionRow, state: HoldemState): HoldemView {
+  const t = state.table;
+  const seed = db
+    .prepare('SELECT server_seed_hash FROM seed_pairs WHERE id = ?')
+    .get(row.seed_pair_id) as { server_seed_hash: string };
+
+  const showdown = t.result?.wentToShowdown === true;
+  const descriptions = new Map(
+    (t.result?.entries ?? []).map((e) => [e.seat, e.description]),
+  );
+
+  const seats: HoldemSeatView[] = t.players.map((p) => {
+    const reveal = p.seat === state.you || (showdown && holdem.inHand(p));
+    return {
+      seat: p.seat,
+      name: p.name,
+      chips: p.chips,
+      isBot: p.isBot,
+      style: p.profile?.name ?? null,
+      ...(reveal && p.hole.length > 0 ? { hole: [...p.hole] } : {}),
+      bet: p.bet,
+      committed: p.committed,
+      folded: p.folded,
+      allIn: p.allIn,
+      sittingOut: p.sittingOut,
+      lastAction: p.lastAction,
+      wonLast: p.wonLast,
+      isButton: p.seat === t.button,
+      isTurn: t.toAct === p.seat,
+      ...(showdown ? { handDescription: descriptions.get(p.seat) ?? null } : {}),
+    };
+  });
+
+  const you = t.players[state.you] as holdem.HoldemPlayer;
+  const yourTurn = t.toAct === state.you && !holdem.isHandOver(t);
+
+  return {
+    street: t.street,
+    board: [...t.board],
+    pot: holdem.potOf(t),
+    currentBet: t.currentBet,
+    seats,
+    you: state.you,
+    toAct: t.toAct,
+    yourTurn,
+    actions: yourTurn ? holdem.legalActions(t, you) : [],
+    toCall: holdem.toCall(t, you),
+    minRaiseTo: holdem.minRaiseTo(t, you),
+    maxRaiseTo: holdem.maxRaiseTo(t, you),
+    handInProgress: t.handInProgress,
+    handNumber: t.handNumber,
+    log: [...t.log],
+    result: t.result
+      ? {
+          wentToShowdown: t.result.wentToShowdown,
+          winners: t.result.winners,
+          pots: t.result.pots,
+        }
+      : null,
+    balance: getBalance(db, userId),
+    proof: { serverSeedHash: seed.server_seed_hash, nonce: row.nonce },
+  };
+}
+
+/**
+ * Let the bots act until it is the human's turn again, or the hand ends.
+ *
+ * Bounded rather than `while (true)`: a bug that stopped advancing the table would
+ * otherwise hang the request thread rather than fail.
+ */
+function runBots(state: HoldemState): void {
+  const random = createCasualSource(state.botSeed);
+  // Advance the seed so the next request's bots do not replay the same decisions.
+  state.botSeed = (state.botSeed * 1_103_515_245 + 12_345) >>> 0;
+
+  for (let guard = 0; guard < 200; guard += 1) {
+    const t = state.table;
+    if (holdem.isHandOver(t) || t.toAct === null || t.toAct === state.you) return;
+    holdem.playBotTurn(t, random);
+  }
+  throw new Error("hold'em table failed to settle");
+}
+
+function openHoldem(db: Db, userId: string): { row: SessionRow; state: HoldemState } {
+  const row = openSession(db, userId, 'holdem');
+  if (!row) throw new NoSuchSessionError('holdem');
+  return { row, state: JSON.parse(row.state_json) as HoldemState };
+}
+
+export function sitHoldem(db: Db, userId: string, buyIn: number): HoldemView {
+  if (openSession(db, userId, 'holdem')) {
+    throw new SessionConflictError('you are already sitting at a table');
+  }
+  assertValidBet(buyIn, getBalance(db, userId));
+
+  const { stream, seedPairId, nonce } = takeStream(db, userId);
+  const botSeed = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
+  const players = holdem.makeTable(
+    createCasualSource(botSeed), buyIn, HOLDEM_BOTS, HOLDEM_BOT_STACK,
+  );
+  const state: HoldemState = {
+    table: holdem.createTable(players),
+    you: 0,
+    buyIn,
+    botSeed,
+  };
+  // The shuffle for the first hand comes off the fair stream taken above.
+  holdem.dealHand(state.table, stream);
+  runBots(state);
+
+  const id = randomUUID();
+  const now = Date.now();
+  applyLedger(db, userId, [{ delta: -buyIn, reason: 'wager' }]);
+  db.prepare(
+    `INSERT INTO game_sessions (id, user_id, game, state_json, seed_pair_id, nonce,
+                                staked, started_at, updated_at)
+     VALUES (?, ?, 'holdem', ?, ?, ?, ?, ?, ?)`,
+  ).run(id, userId, JSON.stringify(state), seedPairId, nonce, buyIn, now, now);
+
+  return holdemView(
+    db, userId,
+    { id, game: 'holdem', state_json: '', seed_pair_id: seedPairId, nonce, staked: buyIn, started_at: now },
+    state,
+  );
+}
+
+export function actHoldem(
+  db: Db,
+  userId: string,
+  action: holdem.HoldemAction,
+  amount: number,
+): HoldemView {
+  const { row, state } = openHoldem(db, userId);
+  if (state.table.toAct !== state.you) throw new SessionConflictError('it is not your turn');
+
+  holdem.act(state.table, action, amount);
+  runBots(state);
+  saveState(db, row.id, state);
+  return holdemView(db, userId, row, state);
+}
+
+export function dealHoldem(db: Db, userId: string): HoldemView {
+  const { row, state } = openHoldem(db, userId);
+  if (state.table.handInProgress) throw new SessionConflictError('finish the hand first');
+  if ((state.table.players[state.you] as holdem.HoldemPlayer).chips <= 0) {
+    throw new SessionConflictError('you are out of chips at this table');
+  }
+
+  // A new hand is a new shuffle, so it takes a new nonce - and that is what makes each
+  // hand independently verifiable rather than one long stream nobody can check.
+  const { stream, seedPairId, nonce } = takeStream(db, userId);
+  holdem.dealHand(state.table, stream);
+  runBots(state);
+
+  db.prepare('UPDATE game_sessions SET seed_pair_id = ?, nonce = ?, state_json = ?, updated_at = ? WHERE id = ?')
+    .run(seedPairId, nonce, JSON.stringify(state), Date.now(), row.id);
+
+  return holdemView(
+    db, userId, { ...row, seed_pair_id: seedPairId, nonce }, state,
+  );
+}
+
+/**
+ * Stand up and take the stack home.
+ *
+ * The credit is the seat's *current* chips, and the debit happened at `sit`. pysino
+ * refunded a buy-in that had never been debited, minting 4,918 chips; keeping both
+ * halves in this file, one at each end of the session, is what stops that.
+ */
+export function leaveHoldem(db: Db, userId: string): { balance: number; cashedOut: number } {
+  const { row, state } = openHoldem(db, userId);
+  if (state.table.handInProgress) {
+    throw new SessionConflictError('finish the hand before you stand up');
+  }
+
+  const stack = (state.table.players[state.you] as holdem.HoldemPlayer).chips;
+  if (stack > 0) applyLedger(db, userId, [{ delta: stack, reason: 'payout' }]);
+
+  recordRound(
+    db, userId, 'holdem', row, state.buyIn, stack,
+    { buyIn: state.buyIn, bots: HOLDEM_BOTS },
+    { hands: state.table.handNumber, cashedOut: stack },
+  );
+  closeSession(db, row.id);
+  return { balance: getBalance(db, userId), cashedOut: stack };
+}
+
+export function holdemStatus(db: Db, userId: string): HoldemView | null {
+  const row = openSession(db, userId, 'holdem');
+  if (!row) return null;
+  return holdemView(db, userId, row, JSON.parse(row.state_json) as HoldemState);
 }

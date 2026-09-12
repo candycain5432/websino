@@ -21,7 +21,7 @@ export const GAMES: GameCard[] = [
   { id: 'roulette',   name: 'Roulette',    tagline: 'Single zero, the whole felt',      house: 'Edge 2.7%',  accent: 'var(--lose)',   available: true },
   { id: 'mines',      name: 'Mines',       tagline: 'Find gems, cash out before a bomb', house: 'Edge 1%',    accent: 'var(--info)',   available: true },
   { id: 'videopoker', name: 'Jacks or Better', tagline: 'Full-pay 9/6 video poker',     house: 'RTP 99.5%',  accent: 'var(--push)',   available: true },
-  { id: 'holdem',     name: "Texas Hold'em", tagline: 'No-limit tables with real players', house: 'Multiplayer', accent: 'var(--purple)', available: false },
+  { id: 'holdem',     name: "Texas Hold'em", tagline: 'No-limit against Monte Carlo bots', house: 'You vs bots', accent: 'var(--purple)', available: true },
 ];
 
 export function Lobby({

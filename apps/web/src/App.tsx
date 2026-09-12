@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BlackjackGame } from './games/BlackjackGame.js';
 import { CrashGame } from './games/CrashGame.js';
 import { DiceGame } from './games/DiceGame.js';
+import { HoldemGame } from './games/HoldemGame.js';
 import { LimboGame } from './games/LimboGame.js';
 import { MinesGame } from './games/MinesGame.js';
 import { RouletteGame } from './games/RouletteGame.js';
@@ -92,6 +93,7 @@ export function App() {
   if (screen === 'roulette') return <RouletteGame {...shared} />;
   if (screen === 'mines') return <MinesGame {...shared} />;
   if (screen === 'videopoker') return <VideoPokerGame {...shared} />;
+  if (screen === 'holdem') return <HoldemGame {...shared} />;
 
   return (
     <Lobby

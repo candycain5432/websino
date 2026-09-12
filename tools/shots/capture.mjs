@@ -175,6 +175,27 @@ await page.getByRole('button', { name: 'Draw', exact: true }).click();
 await page.waitForTimeout(600);
 await shot('19-videopoker');
 
+console.log("hold'em");
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Hold'em/ }).first().click();
+await page.waitForTimeout(300);
+await shot('21-holdem-empty');
+await page.getByRole('button', { name: /^Sit down/ }).click();
+await page.waitForTimeout(900);
+await shot('22-holdem');
+
+// Play a few decisions so a mid-hand table and a settled one both get captured.
+for (let i = 0; i < 8; i += 1) {
+  const check = page.getByRole('button', { name: 'Check', exact: true });
+  const call = page.getByRole('button', { name: /^Call/ });
+  if (await check.count()) await check.click();
+  else if (await call.count()) await call.first().click();
+  else break;
+  await page.waitForTimeout(450);
+}
+await shot('23-holdem-played');
+
 // Mobile, since the pygame version could never do this at all.
 await page.setViewportSize({ width: 402, height: 860 });
 await page.waitForTimeout(300);
@@ -192,6 +213,11 @@ await page.waitForTimeout(300);
 await page.getByRole('button', { name: /Roulette/ }).first().click();
 await page.waitForTimeout(400);
 await shot('20-roulette-mobile');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Hold'em/ }).first().click();
+await page.waitForTimeout(500);
+await shot('24-holdem-mobile');
 
 /*
  * Geometry check, not a screenshot: every rank's corners must stay inside the card.
