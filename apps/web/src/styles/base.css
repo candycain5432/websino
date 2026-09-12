@@ -68,3 +68,32 @@ input {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/**
+ * A small segmented toggle: rows, risk, segment count.
+ *
+ * Lives here rather than in a game's own stylesheet because plinko and the wheel both
+ * want the identical control, and the one thing the shared stylesheet must not have is
+ * two files quietly claiming the same block - there is a test for that.
+ */
+.chip-btn {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-pill);
+  background: var(--panel-light);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
+}
+
+.chip-btn:hover:not(:disabled) { color: var(--text); border-color: var(--gold-dim); }
+.chip-btn:disabled { opacity: 0.5; cursor: default; }
+
+.chip-btn.is-active {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 18%, var(--panel-light));
+  color: var(--gold-bright);
+}

@@ -21,3 +21,11 @@ export {
   pocketIndex, POCKETS, RED_NUMBERS, BLACK_NUMBERS, WHEEL_ORDER,
 } from './games/roulette/index.js';
 export * as crash from './games/crash/index.js';
+export {
+  plinko, type PlinkoConfig, type PlinkoDetail, type Rows, type Risk,
+  ROW_CHOICES, RISK_BASE, bucketChance, multipliersFor, returnToPlayer,
+} from './games/plinko/index.js';
+export {
+  wheel, type WheelConfig, type WheelDetail, type WheelRisk, type Segments,
+  SEGMENT_CHOICES, RISK_SHAPE, wheelFor,
+} from './games/wheel/index.js';

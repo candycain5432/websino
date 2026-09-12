@@ -179,6 +179,27 @@ await page.getByRole('button', { name: 'Draw', exact: true }).click();
 await page.waitForTimeout(600);
 await shot('19-videopoker');
 
+console.log('plinko');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Plinko/ }).first().click();
+await page.locator('.bucket').first().waitFor({ timeout: 10_000 });
+await shot('25-plinko');
+await page.getByRole('button', { name: /^Drop for/ }).click();
+// Sixteen rows at 90ms each, plus the landing beat.
+await page.waitForTimeout(1_800);
+await shot('26-plinko-landed');
+
+console.log('wheel');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Wheel of Fortune/ }).first().click();
+await page.locator('.wof__wheel').waitFor({ timeout: 10_000 });
+await shot('27-wheel');
+await page.getByRole('button', { name: /^Spin for/ }).click();
+await page.waitForTimeout(3_200);
+await shot('28-wheel-settled');
+
 console.log("hold'em");
 await page.getByRole('button', { name: /lobby/i }).click();
 await page.waitForTimeout(300);

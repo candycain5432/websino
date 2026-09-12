@@ -82,17 +82,24 @@ const ledgerCount = async () => {
   return me.ledger.length;
 };
 
+// A string action is matched exactly; a RegExp is matched as written - plinko and the
+// wheel put the stake in their button label, so the exact text moves with the bet.
 for (const [game, action] of [
   ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
+  ['Plinko', /^Drop for/], ['Wheel of Fortune', /^Spin for/],
   ["Hold'em", 'Sit down for 500'],
 ]) {
   await page.getByRole('button', { name: new RegExp(game) }).first().click();
   await page.waitForTimeout(300);
   const before = await chips();
   const ledgerBefore = await ledgerCount();
-  await page.getByRole('button', { name: action, exact: true }).click();
-  await page.waitForTimeout(1100);
+  await page.getByRole('button', {
+    name: action,
+    ...(typeof action === 'string' ? { exact: true } : {}),
+  }).click();
+  // The wheel spins for 2.6s before it settles; everything else resolves at once.
+  await page.waitForTimeout(game === 'Wheel of Fortune' ? 3200 : 1100);
 
   // Mines needs a tile before it can be cashed out, so play it to a finish.
   if (game === 'Mines') {

@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 522 tests
+pnpm test         # 541 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -38,15 +38,15 @@ Node 22+ and pnpm 10+.
 
 | | |
 |---|---|
-| **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo |
+| **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune |
 | **Multiplayer** | Shared hold'em tables over WebSocket — six seats, server-held turn clock, bots filling the empties |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 522, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 541, covering payout maths, chip conservation and seed secrecy |
 
-Plinko, Hi-Lo, Towers, Wheel of Fortune and shared-table blackjack and roulette are next
-— see [Roadmap](#roadmap).
+Hi-Lo, Towers, the slots variety pack, shared-round Bingo and shared-table blackjack and
+roulette are next — see [Roadmap](#roadmap).
 
 ---
 
@@ -278,6 +278,63 @@ Your cash-out is timed by the **server's** clock. You say only *that* you cashed
 server dates the request. Latency therefore costs you a fraction of a tick rather than
 letting you reach back in time.
 
+### Plinko
+
+![Plinko](docs/screenshots/plinko.png)
+
+Drop a ball through 8, 12 or 16 rows of pegs and take the bucket it lands in. Each bounce
+is one draw, so the whole path replays from the seed — the animation is a replay of a
+decided outcome, not a race with the server.
+
+**The multiplier tables are derived, not typed in.** Every plinko implementation I could
+find ships hand-tuned tables per (rows, risk): a screenful of magic numbers whose return
+to player nobody can check and which drift the moment someone "just tweaks one". Here a
+risk level is a single number — how fast the payout climbs per step away from the centre
+— and the table is that shape normalised so the expected return is the house edge *by
+construction*:
+
+```
+shape(k)      = base ^ |k - centre|
+multiplier(k) = (1 - edge) * shape(k) / E[shape]
+```
+
+That makes the return exactly 99% before rounding, for every board size and every risk,
+with no table to get wrong. The three bases were then picked by searching for the value
+that gives each risk a headline worth playing for — 8.5×, 41× and 226× on sixteen rows —
+while keeping every board's *rounded* return within a tenth of a point of 99%. The exact
+figures are pinned in a test, so changing the tuning means changing them deliberately.
+
+Bucket `k` has probability `C(rows, k) / 2^rows`, which is why the edges pay what they
+do: landing in one is sixteen bounces the same way, about 1 in 65,536.
+
+Pegs, the ball and the buckets all get their position from one function. The first
+version laid the rows out with flex gaps and left the triangle a third the width of the
+buckets beneath it — two sets of spacing rules that had no reason to agree.
+
+### Wheel of Fortune
+
+![Wheel of Fortune](docs/screenshots/wheel.png)
+
+One `randBelow(segments)`, and that index *is* the outcome — the rotation is presentation
+over a result the server already computed. A headless check spins it repeatedly and
+asserts the segment that comes to rest under the pointer is the one that paid.
+
+**Solo, deliberately.** It was planned as a shared-round game alongside bingo, but there
+is nothing shared about it: it is a weighted spin with no other players in it,
+mechanically a slot with one reel.
+
+Payouts are derived the same way plinko's are — a risk level names what fraction of
+segments pay and how steeply, and the whole set is scaled so the mean is exactly the
+house edge. Paying segments are spread evenly around the rim rather than bunched, so a
+near miss is a genuine near miss.
+
+**A single spin caps what any segment can pay**, which is the answer to "can we have a
+1000× wheel". Every segment is equally likely, so the payouts must average 99%; if one
+segment took everything and the rest paid nothing it could pay at most
+`segments × 0.99`. A 30-segment wheel therefore cannot offer more than ~29×, however the
+prizes are arranged. A bigger headline needs more segments, not a different table —
+there is a test for that bound.
+
 ### Dice
 
 ![Dice](docs/screenshots/dice.png)
@@ -433,7 +490,8 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Blackjack, slots, crash — plus the HTTP transport that connects the client to the
       server, and sign-in
 - [x] Mines, video poker, solo roulette
-- [ ] Plinko, Hi-Lo, Towers, Wheel of Fortune (solo), slots variety pack
+- [x] Plinko and Wheel of Fortune (solo), both with derived payout tables
+- [ ] Hi-Lo, Towers, slots variety pack
 - [ ] Bingo as a shared round
 - [x] Hold'em against bots, with a rake so the table is a sink rather than a faucet
 - [x] Shared tables: several humans at one hold'em table

@@ -6,9 +6,11 @@ import { DiceGame } from './games/DiceGame.js';
 import { HoldemGame } from './games/HoldemGame.js';
 import { LimboGame } from './games/LimboGame.js';
 import { MinesGame } from './games/MinesGame.js';
+import { PlinkoGame } from './games/PlinkoGame.js';
 import { RouletteGame } from './games/RouletteGame.js';
 import { VideoPokerGame } from './games/VideoPokerGame.js';
 import { SlotsGame } from './games/SlotsGame.js';
+import { WheelGame } from './games/WheelGame.js';
 import { api } from './lib/httpTransport.js';
 import { HttpTransport } from './lib/httpTransport.js';
 import { LocalTransport } from './lib/localTransport.js';
@@ -94,6 +96,8 @@ export function App() {
   if (screen === 'roulette') return <RouletteGame {...shared} />;
   if (screen === 'mines') return <MinesGame {...shared} />;
   if (screen === 'videopoker') return <VideoPokerGame {...shared} />;
+  if (screen === 'plinko') return <PlinkoGame {...shared} />;
+  if (screen === 'wheel') return <WheelGame {...shared} />;
   if (screen === 'holdem') return <HoldemGame {...shared} />;
   // Shared tables talk to the server directly rather than through a transport: there is
   // no local dealer for a table other people are sitting at, and pretending otherwise
