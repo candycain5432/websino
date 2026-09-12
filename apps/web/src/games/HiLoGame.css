@@ -1,0 +1,132 @@
+/**
+ * Hi-Lo.
+ *
+ * The card on the table is the whole board; everything else is a running tally beside
+ * it. The trail of turned-over cards reads newest-first so a streak is visible without
+ * counting.
+ */
+
+.hilo {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-4);
+  justify-items: center;
+}
+
+.hilo__empty {
+  max-inline-size: 46ch;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.hilo__empty h2 { margin: 0 0 var(--space-3); color: var(--gold); font-size: var(--text-lg); }
+.hilo__empty p { margin: 0; font-size: var(--text-sm); line-height: 1.7; }
+
+.hilo__table {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hilo__current {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+
+.hilo__current.is-busted { border-color: var(--lose); box-shadow: var(--glow-lose); }
+.hilo__current.is-cashed { border-color: var(--win); box-shadow: var(--glow-win); }
+
+.hilo__label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ------------------------------------------------------------------- the trail -- */
+
+.hilo__trail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  max-inline-size: 22rem;
+}
+
+.hilo__trail li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.hilo__trail li.is-win { background: color-mix(in srgb, var(--win) 16%, transparent); color: var(--win); }
+.hilo__trail li.is-loss { background: color-mix(in srgb, var(--lose) 18%, transparent); color: var(--lose); }
+
+.hilo__trail-empty {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  align-self: center;
+}
+
+/* ------------------------------------------------------------------- the meters -- */
+
+.hilo__meters {
+  display: flex;
+  gap: var(--space-6);
+  margin: 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hilo__meters dt {
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hilo__meters dd { margin: 2px 0 0; color: var(--gold); font-size: var(--text-lg); }
+
+/* ----------------------------------------------------------------- the controls -- */
+
+.hilo__controls { display: grid; gap: var(--space-3); }
+
+.hilo__wide { inline-size: 100%; }
+
+.hilo__guesses { display: grid; gap: var(--space-2); }
+
+.hilo__guess {
+  display: grid;
+  gap: 2px;
+  padding-block: var(--space-3);
+  line-height: 1.3;
+}
+
+.hilo__guess.is-lower {
+  background: linear-gradient(180deg, var(--info), color-mix(in srgb, var(--info) 70%, black));
+}
+
+.hilo__guess-name { font-size: var(--text-sm); font-weight: 700; }
+.hilo__guess-odds { font-size: var(--text-xs); opacity: 0.85; font-weight: 600; }
+
+.hilo__error { margin: 0; color: var(--lose); font-size: var(--text-sm); }
+
+.hilo__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}

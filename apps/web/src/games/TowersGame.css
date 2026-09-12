@@ -1,0 +1,148 @@
+/**
+ * Towers.
+ *
+ * Rows render top-first, which is how a tower is read, and the row count is fixed at
+ * eight so the ladder never needs to scroll. Tile counts vary by difficulty, so each row
+ * is a grid of `auto-fit` columns rather than a fixed layout.
+ */
+
+.towers {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  justify-items: center;
+  min-inline-size: 0;
+}
+
+.towers__empty {
+  max-inline-size: 46ch;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.towers__empty h2 { margin: 0 0 var(--space-3); color: var(--gold); font-size: var(--text-lg); }
+.towers__empty p { margin: 0; font-size: var(--text-sm); line-height: 1.7; }
+
+.towers__ladder {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  inline-size: min(100%, 30rem);
+}
+
+.rung {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 4px var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  opacity: 0.55;
+  transition: opacity var(--dur), border-color var(--dur), background var(--dur);
+}
+
+.rung.is-cleared { opacity: 1; background: color-mix(in srgb, var(--win) 10%, transparent); }
+
+.rung.is-active {
+  opacity: 1;
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+}
+
+.rung__pay {
+  text-align: end;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.rung.is-active .rung__pay { color: var(--gold-bright); }
+
+.rung__tiles {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+/* `.tile` was already the lobby's game tile, and one global stylesheet means one owner
+   per block - so this is scoped to the rung it lives in. */
+.rung__tile {
+  block-size: clamp(2.1rem, 4.4vw, 2.8rem);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-sm);
+  background: var(--panel-light);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast), transform var(--dur-fast);
+}
+
+.rung.is-active .rung__tile:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 25%, var(--panel-light));
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+
+.rung__tile:disabled { cursor: default; }
+
+.rung__tile.is-chosen {
+  background: color-mix(in srgb, var(--win) 40%, var(--panel-light));
+  border-color: var(--win);
+  color: var(--text);
+}
+
+.rung__tile.is-trap {
+  background: color-mix(in srgb, var(--lose) 28%, var(--panel-light));
+  border-color: color-mix(in srgb, var(--lose) 60%, transparent);
+  color: var(--lose);
+}
+
+.rung__tile.is-fell {
+  background: var(--lose);
+  border-color: var(--lose);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ----------------------------------------------------------------- the controls -- */
+
+.towers__controls { display: grid; gap: var(--space-4); }
+
+.towers__set { border: 0; margin: 0; padding: 0; }
+
+.towers__set legend {
+  padding: 0 0 var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.towers__choices { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.towers__shape {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.towers__wide { inline-size: 100%; }
+
+.towers__meters { display: flex; gap: var(--space-5); margin: 0; }
+.towers__meters dt { color: var(--text-dim); font-size: var(--text-xs); }
+.towers__meters dd { margin: 2px 0 0; color: var(--gold); font-size: var(--text-lg); }
+
+.towers__error { margin: 0; color: var(--lose); font-size: var(--text-sm); }
+
+.towers__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}

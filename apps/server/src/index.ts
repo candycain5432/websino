@@ -14,7 +14,9 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { z } from 'zod';
 
-import { blackjack, holdem, InvalidBetError, mines, videopoker } from '@websino/engine';
+import {
+  blackjack, hilo, holdem, InvalidBetError, mines, towers, videopoker,
+} from '@websino/engine';
 
 import { AuthError, SESSION_COOKIE, createSession, destroySession, login, register, resolveSession } from './auth/index.js';
 import { openDatabase, type Db } from './db/index.js';
@@ -26,9 +28,10 @@ import { registerTableSocket } from './rooms/socket.js';
 import {
   actBlackjack, blackjackStatus, cashOutCrash, cashOutMines, crashStatus,
   dealBlackjack, dealVideoPoker, drawVideoPoker, holdVideoPoker, insureBlackjack,
-  actHoldem, dealHoldem, holdemStatus, leaveHoldem, minesStatus, NoSuchSessionError,
-  revealMinesTile, SessionConflictError, sitHoldem, startCrashRound, startMinesRound,
-  videoPokerStatus,
+  actHoldem, cashOutHiLo, cashOutTowers, climbTowers, dealHoldem, guessHiLo,
+  hiloStatus, holdemStatus, leaveHoldem, minesStatus, NoSuchSessionError,
+  revealMinesTile, SessionConflictError, sitHoldem, startCrashRound, startHiLoRound,
+  startMinesRound, startTowersRound, towersStatus, videoPokerStatus,
 } from './sessions.js';
 
 const credentials = z.object({
@@ -82,6 +85,8 @@ export async function buildServer(db: Db = openDatabase()) {
       error instanceof blackjack.IllegalActionError ||
       error instanceof mines.MinesError ||
       error instanceof holdem.HoldemError ||
+      error instanceof hilo.HiLoError ||
+      error instanceof towers.TowersError ||
       error instanceof videopoker.VideoPokerError
     ) {
       return reply.code(400).send({ error: message });
@@ -222,6 +227,53 @@ export async function buildServer(db: Db = openDatabase()) {
   app.post('/api/mines/cashout', async (request) => cashOutMines(db, requireUser(request).id));
 
   app.get('/api/mines', async (request) => minesStatus(db, requireUser(request).id));
+
+  // ---------------------------------------------------------------- hi-lo --
+  // The run is drawn at `start` and the cards ahead never leave the server; a guess
+  // turns exactly one of them over.
+  app.post('/api/hilo/start', async (request) => {
+    const user = requireUser(request);
+    const { bet } = z.object({ bet: z.number().int().positive() }).parse(request.body);
+    return startHiLoRound(db, user.id, bet);
+  });
+
+  app.post('/api/hilo/guess', async (request) => {
+    const user = requireUser(request);
+    const { guess } = z
+      .object({ guess: z.enum(['higher', 'lower']) })
+      .parse(request.body);
+    return guessHiLo(db, user.id, guess);
+  });
+
+  app.post('/api/hilo/cashout', async (request) => cashOutHiLo(db, requireUser(request).id));
+
+  app.get('/api/hilo', async (request) => hiloStatus(db, requireUser(request).id));
+
+  // --------------------------------------------------------------- towers --
+  // One request per row, for the same reason mines takes one per tile: the trap map
+  // is the game, so it stays here until the round is over.
+  app.post('/api/towers/start', async (request) => {
+    const user = requireUser(request);
+    const body = z
+      .object({
+        bet: z.number().int().positive(),
+        difficulty: z.enum(['easy', 'medium', 'hard', 'expert', 'master']),
+      })
+      .parse(request.body);
+    return startTowersRound(db, user.id, body.bet, body.difficulty);
+  });
+
+  app.post('/api/towers/climb', async (request) => {
+    const user = requireUser(request);
+    // The upper bound is the widest row any difficulty has; the engine rejects a tile
+    // that is not in *this* round's row, which is the check that actually matters.
+    const { tile } = z.object({ tile: z.number().int().min(0).max(3) }).parse(request.body);
+    return climbTowers(db, user.id, tile);
+  });
+
+  app.post('/api/towers/cashout', async (request) => cashOutTowers(db, requireUser(request).id));
+
+  app.get('/api/towers', async (request) => towersStatus(db, requireUser(request).id));
 
   // ----------------------------------------------------------- videopoker --
   app.post('/api/videopoker/deal', async (request) => {

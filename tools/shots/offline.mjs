@@ -55,12 +55,29 @@ for (const [game, action] of [
   ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
   ['Plinko', /^Drop for/], ['Wheel of Fortune', /^Spin for/],
+  ['Hi-Lo', /^Deal for/], ['Towers', /^Climb for/],
   ["Hold'em", 'Sit down for 500'],
 ]) {
   await page.getByRole('button', { name: /lobby/i }).click();
   await page.waitForTimeout(250);
   await page.getByRole('button', { name: new RegExp(game) }).first().click();
   await page.waitForTimeout(250);
+  /*
+   * The nonce, not the balance.
+   *
+   * A slots spin that returns exactly the stake leaves the balance untouched, and this
+   * reported "DID NOT PLAY" for a round that played perfectly well. Every round
+   * advances the practice wallet's nonce, so that is the signal that a round actually
+   * happened - the offline equivalent of the ledger row the online harness checks.
+   */
+  const nonceOf = async () => page.evaluate(() => {
+    try {
+      return JSON.parse(localStorage.getItem('websino.practice.fair.v1') ?? '{}').nonce ?? -1;
+    } catch {
+      return -1;
+    }
+  });
+  const nonceBefore = await nonceOf();
   const chipsBefore = (await page.locator('.shell__chips').textContent())?.trim();
   await page.getByRole('button', {
     name: action,
@@ -68,9 +85,11 @@ for (const [game, action] of [
   }).click();
   await page.waitForTimeout(game === 'Wheel of Fortune' ? 3200 : 900);
   const chipsAfter = (await page.locator('.shell__chips').textContent())?.trim();
-  const moved = chipsBefore !== chipsAfter;
-  console.log(`${game.padEnd(32)} ${moved ? `played (${chipsBefore} -> ${chipsAfter})` : 'DID NOT PLAY'}`);
-  if (!moved) errors.push(`${game} did not move the balance offline`);
+  const played = (await nonceOf()) > nonceBefore;
+  console.log(
+    `${String(game).padEnd(32)} ${played ? `played (${chipsBefore} -> ${chipsAfter})` : 'DID NOT PLAY'}`,
+  );
+  if (!played) errors.push(`${game} drew no round offline`);
 }
 
 await browser.close();

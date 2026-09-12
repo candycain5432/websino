@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 541 tests
+pnpm test         # 564 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -38,15 +38,15 @@ Node 22+ and pnpm 10+.
 
 | | |
 |---|---|
-| **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune |
+| **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune, Hi-Lo, Towers |
 | **Multiplayer** | Shared hold'em tables over WebSocket — six seats, server-held turn clock, bots filling the empties |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 541, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 564, covering payout maths, chip conservation and seed secrecy |
 
-Hi-Lo, Towers, the slots variety pack, shared-round Bingo and shared-table blackjack and
-roulette are next — see [Roadmap](#roadmap).
+The slots variety pack, shared-round Bingo and shared-table blackjack and roulette are
+next — see [Roadmap](#roadmap).
 
 ---
 
@@ -278,6 +278,50 @@ Your cash-out is timed by the **server's** clock. You say only *that* you cashed
 server dates the request. Latency therefore costs you a fraction of a tick rather than
 letting you reach back in time.
 
+### Hi-Lo
+
+![Hi-Lo](docs/screenshots/hilo.png)
+
+See a card, guess whether the next is higher or lower, keep going or take the money.
+
+**Every card is drawn independently from a full 52-card deck** — the deck is never
+depleted. That is a design decision, not a shortcut. With a depleting deck the odds
+depend on every card seen so far, so a player cannot check the quoted multiplier without
+replaying the whole round, and the game can simply run out of cards mid-streak. Drawing
+fresh makes the odds a function of the one card on the table, which is a game you can
+reason about.
+
+**Ties pay both ways.** The choices are *higher or the same* and *lower or the same*, so
+their chances add up to more than 100%. That overlap is deliberate: the alternative is a
+third outcome that loses and that neither button covers — a event the player is quietly
+paying for. Each button is priced honestly for what it actually covers.
+
+Each step pays `(1 - edge) / chance`, so a guess against an ace pays about 12.9× and a
+guess that *cannot lose* — higher-or-same against a two — pays 0.99×. The free step is
+not free, and the number is on the button before you press it.
+
+The whole run is drawn at `start`, all twenty-one cards, exactly the way mines lays its
+board: the number of draws a round consumes never depends on how it was played, and no
+request after the first has to resume a stream from a stored position. The cards ahead
+never leave the server.
+
+### Towers
+
+![Towers](docs/screenshots/towers.png)
+
+Mines with a ladder instead of a grid. Pick a safe tile on each of eight rows; one tile
+per row ends the run. Five difficulties, from one trap in four to three traps in four.
+
+The multiplier after `k` rows is `(1 - edge) / p^k`, so **every cash-out height carries
+exactly the same expected return** — stopping at row two and going for the top are worth
+the same, and only the variance differs. Asserted exactly at every height on every
+difficulty, by arithmetic rather than simulation. Master tops out at 0.99 × 65,536,
+which is precisely the odds of eight rows of one-in-four.
+
+Every row is shuffled up front even though the player may never reach it, so a round that
+ends on row one leaves the stream exactly where a cleared tower would. Otherwise a
+player's own choices would shift the cards of their next round.
+
 ### Plinko
 
 ![Plinko](docs/screenshots/plinko.png)
@@ -491,7 +535,8 @@ The interesting tests are the invariants, not the line coverage:
       server, and sign-in
 - [x] Mines, video poker, solo roulette
 - [x] Plinko and Wheel of Fortune (solo), both with derived payout tables
-- [ ] Hi-Lo, Towers, slots variety pack
+- [x] Hi-Lo and Towers, both priced so every cash-out point is worth the same
+- [ ] Slots variety pack
 - [ ] Bingo as a shared round
 - [x] Hold'em against bots, with a rake so the table is a sink rather than a faucet
 - [x] Shared tables: several humans at one hold'em table

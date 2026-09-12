@@ -25,6 +25,8 @@ export const GAMES: GameCard[] = [
   { id: 'videopoker', name: 'Jacks or Better', tagline: 'Full-pay 9/6 video poker',     house: 'RTP 99.5%',  accent: 'var(--push)',   available: true },
   { id: 'holdem',     name: "Texas Hold'em", tagline: 'No-limit against Monte Carlo bots', house: 'You vs bots', accent: 'var(--purple)', available: true },
   { id: 'plinko',     name: 'Plinko',      tagline: 'Drop a ball, take the bucket',   house: 'RTP 99%',    accent: 'var(--warn)',   available: true },
+  { id: 'hilo',       name: 'Hi-Lo',       tagline: 'Higher or lower, over and over', house: 'Edge 1%',    accent: 'var(--info)',   available: true },
+  { id: 'towers',     name: 'Towers',      tagline: 'Climb rows, dodge the traps',    house: 'Edge 1%',    accent: 'var(--win)',    available: true },
   { id: 'wheel',      name: 'Wheel of Fortune', tagline: 'One spin, one segment',      house: 'RTP 99%',    accent: 'var(--gold)',   available: true },
   { id: 'tables',     name: 'Shared tables', tagline: 'Live hold\u2019em with other people', house: 'Multiplayer', accent: 'var(--gold-bright)', available: true, onlineOnly: true },
 ];

@@ -6,7 +6,9 @@ import { DiceGame } from './games/DiceGame.js';
 import { HoldemGame } from './games/HoldemGame.js';
 import { LimboGame } from './games/LimboGame.js';
 import { MinesGame } from './games/MinesGame.js';
+import { HiLoGame } from './games/HiLoGame.js';
 import { PlinkoGame } from './games/PlinkoGame.js';
+import { TowersGame } from './games/TowersGame.js';
 import { RouletteGame } from './games/RouletteGame.js';
 import { VideoPokerGame } from './games/VideoPokerGame.js';
 import { SlotsGame } from './games/SlotsGame.js';
@@ -97,6 +99,8 @@ export function App() {
   if (screen === 'mines') return <MinesGame {...shared} />;
   if (screen === 'videopoker') return <VideoPokerGame {...shared} />;
   if (screen === 'plinko') return <PlinkoGame {...shared} />;
+  if (screen === 'hilo') return <HiLoGame {...shared} />;
+  if (screen === 'towers') return <TowersGame {...shared} />;
   if (screen === 'wheel') return <WheelGame {...shared} />;
   if (screen === 'holdem') return <HoldemGame {...shared} />;
   // Shared tables talk to the server directly rather than through a transport: there is

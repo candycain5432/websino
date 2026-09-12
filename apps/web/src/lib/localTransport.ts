@@ -9,16 +9,18 @@
 
 import { commit, createCasualSource, FairStream } from '@websino/fair';
 import {
-  blackjack, crash, dice, holdem, limbo, mines, plinko, roulette, shuffleShoe, slots,
-  videopoker, wheel,
-  type BlackjackView, type CrashView, type HoldemSeatView, type HoldemView,
-  type MinesView, type ShoeState, type VideoPokerView,
+  blackjack, crash, dice, hilo, holdem, limbo, mines, plinko, roulette, shuffleShoe,
+  slots, towers, videopoker, wheel,
+  type BlackjackView, type CrashView, type HiLoView, type HoldemSeatView,
+  type HoldemView, type MinesView, type ShoeState, type TowersView,
+  type VideoPokerView,
 } from '@websino/engine';
 import type { RoundGame } from '@websino/engine';
 
 import type {
-  BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, HoldemAction,
-  HoldemApi, MinesApi, PlayRequest, PlayResponse, VideoPokerApi,
+  BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, HiLoApi,
+  HiLoGuess, HoldemAction, HoldemApi, MinesApi, PlayRequest, PlayResponse, TowersApi,
+  TowersDifficulty, VideoPokerApi,
 } from './transport.js';
 
 const WALLET_KEY = 'websino.practice.wallet.v1';
@@ -57,6 +59,8 @@ interface StoredTables {
   } | null;
   crash: { round: crash.CrashRound; startedAt: number } | null;
   mines: { round: mines.MinesRound; nonce: number } | null;
+  hilo: { round: hilo.HiLoRound; nonce: number } | null;
+  towers: { round: towers.TowersRound; nonce: number } | null;
   videopoker: { round: videopoker.VideoPokerRound; nonce: number } | null;
   holdem: {
     table: holdem.HoldemTable;
@@ -110,7 +114,12 @@ export class LocalTransport implements GameTransport {
     });
     this.#tables = read<StoredTables>(TABLES_KEY, {
       blackjack: null, crash: null, mines: null, videopoker: null, holdem: null,
+      hilo: null, towers: null,
     });
+    // A stored blob written before these games existed has no key for them, and
+    // `read` only defaults the whole object, not its missing fields.
+    this.#tables.hilo ??= null;
+    this.#tables.towers ??= null;
     this.#persist();
   }
 
@@ -387,6 +396,150 @@ export class LocalTransport implements GameTransport {
       if (!table) throw new Error('no mines board in progress');
       table.round = mines.cashOut(table.round);
       return this.#finishMines();
+    },
+  };
+
+  // ------------------------------------------------------------------ hi-lo --
+
+  #hiloView(): HiLoView {
+    const table = this.#tables.hilo;
+    if (!table) throw new Error('no hi-lo run');
+    const round = table.round;
+    const current = hilo.currentCard(round);
+    return {
+      state: round.state,
+      bet: round.bet,
+      opening: round.cards[0] as number,
+      current,
+      history: round.history.map((step) => ({ ...step })),
+      steps: round.history.length,
+      multiplier: round.multiplier,
+      payout: hilo.currentPayout(round),
+      odds: {
+        higher: {
+          chance: hilo.winChance(current, 'higher'),
+          multiplier: hilo.stepMultiplier(current, 'higher'),
+        },
+        lower: {
+          chance: hilo.winChance(current, 'lower'),
+          multiplier: hilo.stepMultiplier(current, 'lower'),
+        },
+      },
+      capped: hilo.isCapped(round),
+      maxSteps: hilo.MAX_STEPS,
+      balance: this.#balance,
+      proof: this.#proofFor(table.nonce),
+    };
+  }
+
+  #finishHiLo(): HiLoView {
+    const table = this.#tables.hilo;
+    if (!table) throw new Error('no hi-lo run');
+    this.#balance += hilo.currentPayout(table.round);
+    const view = this.#hiloView();
+    this.#tables.hilo = null;
+    this.#persist();
+    return view;
+  }
+
+  readonly hilo: HiLoApi = {
+    status: async (): Promise<HiLoView | null> =>
+      this.#tables.hilo ? this.#hiloView() : null,
+
+    start: async (bet: number): Promise<HiLoView> => {
+      if (this.#tables.hilo) throw new Error('finish the run in progress first');
+      if (!Number.isInteger(bet) || bet < 1) throw new Error('invalid bet');
+      if (bet > this.#balance) throw new Error('not enough practice chips');
+
+      const { stream, nonce } = this.#takeStream();
+      this.#balance -= bet;
+      this.#tables.hilo = { round: hilo.startHiLo(bet, stream), nonce };
+      this.#persist();
+      return this.#hiloView();
+    },
+
+    guess: async (choice: HiLoGuess): Promise<HiLoView> => {
+      const table = this.#tables.hilo;
+      if (!table) throw new Error('no hi-lo run in progress');
+      table.round = hilo.guess(table.round, choice);
+      if (table.round.state !== 'playing') return this.#finishHiLo();
+      this.#persist();
+      return this.#hiloView();
+    },
+
+    cashOut: async (): Promise<HiLoView> => {
+      const table = this.#tables.hilo;
+      if (!table) throw new Error('no hi-lo run in progress');
+      table.round = hilo.cashOut(table.round);
+      return this.#finishHiLo();
+    },
+  };
+
+  // ----------------------------------------------------------------- towers --
+
+  #towersView(): TowersView {
+    const table = this.#tables.towers;
+    if (!table) throw new Error('no tower');
+    const round = table.round;
+    const view: TowersView = {
+      state: round.state,
+      bet: round.bet,
+      difficulty: round.difficulty,
+      tiles: towers.tilesPerRow(round.difficulty),
+      traps: towers.trapsPerRow(round.difficulty),
+      rows: towers.ROWS,
+      picks: [...round.picks],
+      multiplier: towers.currentMultiplier(round),
+      payout: towers.currentPayout(round),
+      nextMultiplier: towers.nextMultiplier(round),
+      table: towers.multiplierTable(round.difficulty),
+      balance: this.#balance,
+      proof: this.#proofFor(table.nonce),
+    };
+    if (round.state === 'playing') return view;
+    return { ...view, trapMap: round.traps.map((r) => [...r]), hit: round.hit };
+  }
+
+  #finishTowers(): TowersView {
+    const table = this.#tables.towers;
+    if (!table) throw new Error('no tower');
+    this.#balance += towers.currentPayout(table.round);
+    const view = this.#towersView();
+    this.#tables.towers = null;
+    this.#persist();
+    return view;
+  }
+
+  readonly towers: TowersApi = {
+    status: async (): Promise<TowersView | null> =>
+      this.#tables.towers ? this.#towersView() : null,
+
+    start: async (bet: number, difficulty: TowersDifficulty): Promise<TowersView> => {
+      if (this.#tables.towers) throw new Error('finish the tower in progress first');
+      if (!Number.isInteger(bet) || bet < 1) throw new Error('invalid bet');
+      if (bet > this.#balance) throw new Error('not enough practice chips');
+
+      const { stream, nonce } = this.#takeStream();
+      this.#balance -= bet;
+      this.#tables.towers = { round: towers.startTowers(bet, difficulty, stream), nonce };
+      this.#persist();
+      return this.#towersView();
+    },
+
+    climb: async (tile: number): Promise<TowersView> => {
+      const table = this.#tables.towers;
+      if (!table) throw new Error('no tower in progress');
+      table.round = towers.climb(table.round, tile);
+      if (table.round.state !== 'playing') return this.#finishTowers();
+      this.#persist();
+      return this.#towersView();
+    },
+
+    cashOut: async (): Promise<TowersView> => {
+      const table = this.#tables.towers;
+      if (!table) throw new Error('no tower in progress');
+      table.round = towers.cashOut(table.round);
+      return this.#finishTowers();
     },
   };
 

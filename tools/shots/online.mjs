@@ -77,9 +77,18 @@ if (OUT) await page.screenshot({ path: `${OUT}/online-lobby.png` });
  */
 const cookieHeader = async () =>
   (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
-const ledgerCount = async () => {
-  const me = await (await fetch(`${API}/api/me`, { headers: { cookie: await cookieHeader() } })).json();
-  return me.ledger.length;
+/*
+ * The fairness nonce, not the length of the ledger list.
+ *
+ * `/api/me` returns only the twenty most recent ledger rows, so once a run got long
+ * enough to exceed that the count saturated and every later game read "0 rows written" -
+ * which looked exactly like a game that had silently stopped working. The nonce is
+ * uncapped, monotonic, and advances once per round drawn, so it says what this actually
+ * wants to know: did the server draw anything?
+ */
+const nonce = async () => {
+  const fair = await (await fetch(`${API}/api/fair`, { headers: { cookie: await cookieHeader() } })).json();
+  return fair.nonce;
 };
 
 // A string action is matched exactly; a RegExp is matched as written - plinko and the
@@ -88,12 +97,13 @@ for (const [game, action] of [
   ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
   ['Plinko', /^Drop for/], ['Wheel of Fortune', /^Spin for/],
+  ['Hi-Lo', /^Deal for/], ['Towers', /^Climb for/],
   ["Hold'em", 'Sit down for 500'],
 ]) {
   await page.getByRole('button', { name: new RegExp(game) }).first().click();
   await page.waitForTimeout(300);
   const before = await chips();
-  const ledgerBefore = await ledgerCount();
+  const drawsBefore = await nonce();
   await page.getByRole('button', {
     name: action,
     ...(typeof action === 'string' ? { exact: true } : {}),
@@ -101,6 +111,16 @@ for (const [game, action] of [
   // The wheel spins for 2.6s before it settles; everything else resolves at once.
   await page.waitForTimeout(game === 'Wheel of Fortune' ? 3200 : 1100);
 
+  // Hi-Lo and Towers are session games: the stake is spent at `start`, and it takes a
+  // move before there is anything to cash out.
+  if (game === 'Hi-Lo') {
+    const higher = page.getByRole('button', { name: /Higher or same/ });
+    if (await higher.count()) { await higher.click(); await page.waitForTimeout(600); }
+  }
+  if (game === 'Towers') {
+    const tile = page.locator('.rung.is-active .rung__tile').first();
+    if (await tile.count()) { await tile.click(); await page.waitForTimeout(600); }
+  }
   // Mines needs a tile before it can be cashed out, so play it to a finish.
   if (game === 'Mines') {
     const tile = page.getByRole('button', { name: 'tile 1', exact: true });
@@ -121,15 +141,15 @@ for (const [game, action] of [
     }
   }
   // Settle anything still open so the next game starts clean.
-  for (const name of ['Stand up with', 'Stand', 'Cash out ', 'No thanks', 'Draw']) {
+  for (const name of ['Stand up with', 'Stand', 'Cash out ', 'Take ', 'No thanks', 'Draw']) {
     const button = page.getByRole('button', { name: new RegExp(name) });
     if (await button.count()) { await button.first().click(); await page.waitForTimeout(600); }
   }
 
   const after = await chips();
-  const wrote = (await ledgerCount()) - ledgerBefore;
-  console.log(`${game.padEnd(32)} ${before} -> ${after}   ${wrote} ledger row(s)`);
-  if (wrote < 1) errors.push(`${game} wrote nothing to the ledger`);
+  const drew = (await nonce()) - drawsBefore;
+  console.log(`${String(game).padEnd(32)} ${before} -> ${after}   ${drew} draw(s)`);
+  if (drew < 1) errors.push(`${game} drew nothing from the server`);
 
   if (OUT && game === 'Blackjack') await page.screenshot({ path: `${OUT}/online-blackjack.png` });
   await page.getByRole('button', { name: /lobby/i }).click();
@@ -142,14 +162,14 @@ for (const [game, action] of [
   await page.getByRole('button', { name: /Roulette/ }).first().click();
   await page.waitForTimeout(300);
   const before = await chips();
-  const ledgerBefore = await ledgerCount();
+  const drawsBefore = await nonce();
   await page.getByRole('button', { name: '17', exact: true }).first().click();
   await page.getByRole('button', { name: /^Red$/ }).first().click();
   await page.getByRole('button', { name: 'Spin', exact: true }).click();
   await page.waitForTimeout(1100);
-  const wrote = (await ledgerCount()) - ledgerBefore;
-  console.log(`${'Roulette'.padEnd(32)} ${before} -> ${await chips()}   ${wrote} ledger row(s)`);
-  if (wrote < 1) errors.push('Roulette wrote nothing to the ledger');
+  const drew = (await nonce()) - drawsBefore;
+  console.log(`${'Roulette'.padEnd(32)} ${before} -> ${await chips()}   ${drew} draw(s)`);
+  if (drew < 1) errors.push('Roulette drew nothing from the server');
   if (OUT) await page.screenshot({ path: `${OUT}/online-roulette.png` });
   await page.getByRole('button', { name: /lobby/i }).click();
   await page.waitForTimeout(300);
