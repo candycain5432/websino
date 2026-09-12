@@ -10,6 +10,8 @@ export interface GameCard {
   house: string;
   accent: string;
   available: boolean;
+  /** Needs a server and other people, so practice mode cannot offer it. */
+  onlineOnly?: boolean;
 }
 
 export const GAMES: GameCard[] = [
@@ -22,6 +24,7 @@ export const GAMES: GameCard[] = [
   { id: 'mines',      name: 'Mines',       tagline: 'Find gems, cash out before a bomb', house: 'Edge 1%',    accent: 'var(--info)',   available: true },
   { id: 'videopoker', name: 'Jacks or Better', tagline: 'Full-pay 9/6 video poker',     house: 'RTP 99.5%',  accent: 'var(--push)',   available: true },
   { id: 'holdem',     name: "Texas Hold'em", tagline: 'No-limit against Monte Carlo bots', house: 'You vs bots', accent: 'var(--purple)', available: true },
+  { id: 'tables',     name: 'Shared tables', tagline: 'Live hold\u2019em with other people', house: 'Multiplayer', accent: 'var(--gold-bright)', available: true, onlineOnly: true },
 ];
 
 export function Lobby({
@@ -75,21 +78,29 @@ export function Lobby({
       )}
 
       <ul className="lobby__grid">
-        {GAMES.map((game) => (
-          <li key={game.id}>
-            <button
-              className={`tile${game.available ? '' : ' tile--soon'}`}
-              style={{ '--tile-accent': game.accent } as React.CSSProperties}
-              onClick={() => game.available && onOpen(game.id)}
-              disabled={!game.available}
-            >
-              <span className="tile__glow" aria-hidden="true" />
-              <span className="tile__name">{game.name}</span>
-              <span className="tile__tagline">{game.tagline}</span>
-              <span className="tile__badge">{game.available ? game.house : 'Coming soon'}</span>
-            </button>
-          </li>
-        ))}
+        {GAMES.map((game) => {
+          // A shared table needs a server and other people, so practice offers it
+          // greyed out and says why rather than pretending it is missing.
+          const offline = game.onlineOnly === true && transport.mode === 'practice';
+          const playable = game.available && !offline;
+          return (
+            <li key={game.id}>
+              <button
+                className={`tile${playable ? '' : ' tile--soon'}`}
+                style={{ '--tile-accent': game.accent } as React.CSSProperties}
+                onClick={() => playable && onOpen(game.id)}
+                disabled={!playable}
+              >
+                <span className="tile__glow" aria-hidden="true" />
+                <span className="tile__name">{game.name}</span>
+                <span className="tile__tagline">{game.tagline}</span>
+                <span className="tile__badge">
+                  {offline ? 'Sign in to play' : game.available ? game.house : 'Coming soon'}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
       <footer className="lobby__footer">

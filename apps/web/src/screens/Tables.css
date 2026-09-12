@@ -1,0 +1,328 @@
+/**
+ * Shared tables.
+ *
+ * The baize is a CSS grid rather than the ellipse a real table is, and that is a choice
+ * rather than a shortcut: an oval arrangement means absolute positioning, which stops
+ * working the moment the viewport is narrow. Six seats in a grid that reflows to two
+ * columns on a phone reads the same and survives the resize.
+ */
+
+.floor {
+  max-inline-size: 1100px;
+  margin-inline: auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+}
+
+.floor--loading {
+  min-block-size: 60vh;
+  place-content: center;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------- the bar -- */
+
+.floor__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.floor__back {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+
+.floor__back:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+.floor__titles { flex: 1 1 12rem; }
+.floor__titles h1 { margin: 0; font-size: var(--text-lg); color: var(--gold); }
+.floor__titles p { margin: 2px 0 0; color: var(--text-dim); font-size: var(--text-sm); }
+
+.floor__balance { color: var(--gold); font-size: var(--text-lg); font-weight: 700; }
+
+.floor__status {
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--panel-edge);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.floor__status--open { border-color: var(--win); color: var(--win); }
+.floor__status--reconnecting { border-color: var(--warn); color: var(--warn); }
+.floor__status--closed { border-color: var(--lose); color: var(--lose); }
+
+/* ------------------------------------------------------------------ the floor -- */
+
+.floor__tables {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.table-card {
+  inline-size: 100%;
+  display: grid;
+  gap: var(--space-1);
+  text-align: start;
+  padding: var(--space-4);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, var(--felt-dark), var(--panel));
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur-fast), transform var(--dur-fast);
+}
+
+.table-card:hover {
+  border-color: var(--gold-dim);
+  transform: translateY(-2px);
+}
+
+.table-card__name { font-size: var(--text-base); color: var(--gold); font-weight: 600; }
+.table-card__blinds { color: var(--text); font-size: var(--text-sm); }
+.table-card__seats,
+.table-card__buyin { color: var(--text-dim); font-size: var(--text-xs); }
+
+.floor__empty,
+.floor__note { color: var(--text-dim); font-size: var(--text-sm); }
+.floor__note { max-inline-size: 52ch; }
+
+/* ------------------------------------------------------------------- the baize -- */
+
+.baize {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-4);
+  border: 1px solid var(--felt-light);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(ellipse at 50% 40%, var(--felt-light), var(--felt) 55%, var(--felt-dark));
+  box-shadow: var(--shadow-lg);
+}
+
+.baize__seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.pseat {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: var(--space-3) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: rgb(8 16 13 / 42%);
+  min-block-size: 8.5rem;
+  align-content: start;
+  transition: border-color var(--dur), box-shadow var(--dur), opacity var(--dur);
+}
+
+/*
+ * Two different things, deliberately two different colours.
+ *
+ * Both were gold at first and they are the two most important signals on the screen -
+ * which seat is mine, and which seat is on the clock. Reading one as the other is how
+ * you check when it was not your turn. So "mine" is silver and labelled, and gold is
+ * reserved for the clock.
+ */
+.pseat.is-you {
+  border-color: var(--silver);
+  background: rgb(8 16 13 / 62%);
+}
+
+.pseat.is-turn {
+  border-color: var(--gold);
+  box-shadow: var(--glow-gold);
+}
+.pseat.is-folded { opacity: 0.45; }
+.pseat.is-empty { opacity: 0.3; border-style: dashed; border-color: var(--panel-edge); }
+.pseat.is-away { border-color: var(--warn); }
+
+.pseat__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  /* The badges are fixed width; the name is what gives way. A fixed max-width on the
+     name instead let the row grow past the seat and clip the badge against its edge. */
+  min-inline-size: 0;
+}
+
+.pseat__name {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pseat__you,
+.pseat__button { flex: 0 0 auto; }
+
+.pseat__button {
+  display: grid;
+  place-items: center;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  border-radius: 50%;
+  background: var(--card-face);
+  color: var(--ink);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.pseat__you {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--silver);
+  color: var(--ink);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pseat__style,
+.pseat__away,
+.pseat__open,
+.pseat__action { font-size: var(--text-xs); color: var(--text-dim); }
+
+.pseat__away { color: var(--warn); }
+.pseat__hand { font-size: var(--text-xs); color: var(--gold-bright); }
+
+.pseat__cards {
+  display: flex;
+  gap: 3px;
+  min-block-size: 3.4rem;
+  align-items: center;
+}
+
+.pseat__chips { font-size: var(--text-sm); color: var(--text); }
+.pseat__bet { font-size: var(--text-xs); color: var(--gold); }
+
+/* ------------------------------------------------------------------ the middle -- */
+
+.baize__middle { display: grid; gap: var(--space-3); justify-items: center; }
+.baize__board { display: flex; gap: var(--space-2); }
+
+.baize__slot {
+  inline-size: 3.5rem;
+  block-size: 4.9rem;
+  border: 1px dashed rgb(238 234 222 / 18%);
+  border-radius: var(--radius-sm);
+}
+
+.baize__pot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.baize__pot strong { color: var(--gold); font-size: var(--text-lg); }
+.baize__next { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+
+.clock {
+  inline-size: min(18rem, 80%);
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.clock__bar {
+  inline-size: 100%;
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--gold);
+  transform-origin: left center;
+  transition: transform 200ms linear;
+}
+
+.clock__value { font-size: var(--text-xs); color: var(--text-dim); }
+.clock.is-urgent .clock__bar { background: var(--lose); }
+.clock.is-urgent .clock__value { color: var(--lose); }
+
+/* ---------------------------------------------------------------- the controls -- */
+
+.floor__controls {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.sitdown { display: grid; gap: var(--space-3); justify-items: center; inline-size: 100%; }
+
+.sitdown label,
+.floor__raise {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  inline-size: min(24rem, 100%);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.sitdown input[type='range'],
+.floor__raise input[type='range'] { inline-size: 100%; accent-color: var(--gold); }
+
+.sitdown strong,
+.floor__raise strong { color: var(--gold); margin-inline-start: var(--space-2); }
+
+.floor__buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
+.floor__waiting { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+.floor__error { margin: 0; color: var(--lose); font-size: var(--text-sm); }
+
+.floor__keys { margin: 0; color: var(--text-muted); font-size: var(--text-xs); }
+.floor__keys kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------------- the log -- */
+
+.floor__log {
+  padding: var(--space-4);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.floor__log h2 { margin: 0 0 var(--space-2); font-size: var(--text-sm); color: var(--text-dim); }
+.floor__log ol { margin: 0; padding-inline-start: var(--space-5); color: var(--text-dim); }
+.floor__log li { font-size: var(--text-xs); line-height: 1.7; }
+
+@media (width <= 30rem) {
+  .baize__seats { grid-template-columns: repeat(2, 1fr); }
+  .baize__board { flex-wrap: wrap; justify-content: center; }
+}
