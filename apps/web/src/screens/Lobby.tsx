@@ -18,7 +18,7 @@ export const GAMES: GameCard[] = [
   { id: 'dice',       name: 'Dice',        tagline: 'Roll over or under your number', house: 'Edge 1%',    accent: 'var(--info)',   available: true },
   { id: 'limbo',      name: 'Limbo',       tagline: 'Pick a target, clear it, cash',  house: 'Edge 1%',    accent: 'var(--purple)', available: true },
   { id: 'blackjack',  name: 'Blackjack',   tagline: 'Six decks, dealer stands soft 17', house: 'Edge 0.5%', accent: 'var(--win)',    available: true },
-  { id: 'slots',      name: 'Golden Reels',tagline: '20 lines, wilds, free spins',    house: 'RTP 94.7%',  accent: 'var(--gold)',   available: true },
+  { id: 'slots',      name: 'Slots',       tagline: 'Three cabinets, wilds, free spins', house: 'RTP 94.7%',  accent: 'var(--gold)',   available: true },
   { id: 'crash',      name: 'Crash',       tagline: 'Cash out before the curve dies', house: 'Edge 1%',    accent: 'var(--warn)',   available: true },
   { id: 'roulette',   name: 'Roulette',    tagline: 'Single zero, the whole felt',      house: 'Edge 2.7%',  accent: 'var(--lose)',   available: true },
   { id: 'mines',      name: 'Mines',       tagline: 'Find gems, cash out before a bomb', house: 'Edge 1%',    accent: 'var(--info)',   available: true },

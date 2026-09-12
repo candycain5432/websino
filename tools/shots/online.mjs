@@ -94,7 +94,7 @@ const nonce = async () => {
 // A string action is matched exactly; a RegExp is matched as written - plinko and the
 // wheel put the stake in their button label, so the exact text moves with the bet.
 for (const [game, action] of [
-  ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll'],
+  ['Slots', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
   ['Plinko', /^Drop for/], ['Wheel of Fortune', /^Spin for/],
   ['Hi-Lo', /^Deal for/], ['Towers', /^Climb for/],

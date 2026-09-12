@@ -6,11 +6,13 @@ export * from './types.js';
 export * from './views.js';
 export { dice, type DiceConfig, type DiceDetail, type DiceDirection, multiplierFor, winChanceOf } from './games/dice/index.js';
 export { limbo, type LimboConfig, type LimboDetail, drawMultiplier, MULTIPLIER_SCALE } from './games/limbo/index.js';
-export { slots, type SlotsDetail, type Spin, type LineWin } from './games/slots/index.js';
 export {
-  SYMBOLS, SYMBOL_GLYPHS, SYMBOL_NAMES, PAYTABLE, PAYLINES, LINE_COUNT, REELS, ROWS,
-  SCATTER, WILD, SCATTER_PAYS, FREE_SPIN_AWARD, FREE_SPIN_MULTIPLIER, type SlotSymbol,
-} from './games/slots/reels.js';
+  slots, type SlotsConfig, type SlotsDetail, type Spin, type LineWin,
+  type SlotMachine, type MachineReturn,
+  MACHINES, GOLDEN_REELS, NEON_NIGHTS, EMERALD_RUSH, machineById, buildStrip, stripsOf,
+  lineCountOf, exactReturn, evaluateLine, evaluateGrid, spinGrid,
+  REELS, ROWS, SCATTER, WILD, MAX_FREE_SPINS,
+} from './games/slots/index.js';
 export * as blackjack from './games/blackjack/index.js';
 export * as holdem from './games/holdem/index.js';
 export * as mines from './games/mines/index.js';

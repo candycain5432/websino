@@ -78,7 +78,7 @@ await shot('05-limbo');
 console.log('slots');
 await page.getByRole('button', { name: /lobby/i }).click();
 await page.waitForTimeout(300);
-await page.getByRole('button', { name: /Golden Reels/ }).first().click();
+await page.getByRole('button', { name: /^Slots\b/ }).first().click();
 await page.waitForTimeout(300);
 await page.getByRole('button', { name: 'Spin', exact: true }).click();
 await page.waitForTimeout(900);
