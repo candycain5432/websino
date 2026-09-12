@@ -4,6 +4,9 @@ import { BlackjackGame } from './games/BlackjackGame.js';
 import { CrashGame } from './games/CrashGame.js';
 import { DiceGame } from './games/DiceGame.js';
 import { LimboGame } from './games/LimboGame.js';
+import { MinesGame } from './games/MinesGame.js';
+import { RouletteGame } from './games/RouletteGame.js';
+import { VideoPokerGame } from './games/VideoPokerGame.js';
 import { SlotsGame } from './games/SlotsGame.js';
 import { api } from './lib/httpTransport.js';
 import { HttpTransport } from './lib/httpTransport.js';
@@ -86,6 +89,9 @@ export function App() {
   if (screen === 'slots') return <SlotsGame {...shared} />;
   if (screen === 'blackjack') return <BlackjackGame {...shared} />;
   if (screen === 'crash') return <CrashGame {...shared} />;
+  if (screen === 'roulette') return <RouletteGame {...shared} />;
+  if (screen === 'mines') return <MinesGame {...shared} />;
+  if (screen === 'videopoker') return <VideoPokerGame {...shared} />;
 
   return (
     <Lobby

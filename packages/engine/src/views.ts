@@ -60,3 +60,36 @@ export interface CrashView {
   cashedMultiplier?: number | null;
   payout?: number;
 }
+
+export interface MinesView {
+  state: 'playing' | 'busted' | 'cashed';
+  bet: number;
+  mines: number;
+  revealed: number[];
+  picks: number;
+  multiplier: number;
+  /** What cashing out right now would return. */
+  payout: number;
+  /** What one more safe tile would be worth, or null if the board is clear. */
+  nextMultiplier: number | null;
+  balance: number;
+  /** Absent while the round is live - this is the map. */
+  minePositions?: number[];
+  hitPosition?: number | null;
+  proof: { serverSeedHash: string; nonce: number };
+}
+
+export interface VideoPokerView {
+  phase: 'holding' | 'complete';
+  cards: Card[];
+  held: boolean[];
+  coins: number;
+  coinValue: number;
+  bet: number;
+  drawn: number[];
+  result: string | null;
+  resultName: string | null;
+  payout: number;
+  balance: number;
+  proof: { serverSeedHash: string; nonce: number };
+}

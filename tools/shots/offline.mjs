@@ -51,7 +51,10 @@ const out = process.argv[2];
 if (out) await page.screenshot({ path: `${out}/offline.png` });
 // The three games added since this script was written must work here too - offline is
 // not a cut-down build, it is the same engine with a local dealer.
-for (const [game, action] of [['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet']]) {
+for (const [game, action] of [
+  ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'],
+  ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
+]) {
   await page.getByRole('button', { name: /lobby/i }).click();
   await page.waitForTimeout(250);
   await page.getByRole('button', { name: new RegExp(game) }).first().click();

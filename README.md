@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 265 tests
+pnpm test         # 419 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -38,17 +38,79 @@ Node 22+ and pnpm 10+.
 
 | | |
 |---|---|
-| **Games** | Blackjack, Golden Reels (slots), Crash, Dice, Limbo |
+| **Games** | Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 265, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 419, covering payout maths, chip conservation and seed secrecy |
 
-Roulette, video poker, mines and hold'em tables are next — see [Roadmap](#roadmap).
+Hold'em tables, Plinko, Hi-Lo, Towers and Wheel of Fortune are next — see
+[Roadmap](#roadmap).
 
 ---
 
 ## The games
+
+### Roulette
+
+![Roulette](docs/screenshots/roulette.png)
+
+The complete single-zero felt: straights, splits, streets, corners, six lines, columns,
+dozens and all six even-money bets. Click a spot to add a chip, right-click to clear it.
+
+**Every bet type returns exactly 36/37**, and there is no house-edge constant anywhere in
+the file. On a 37-pocket wheel a bet covering `n` numbers pays `36/n - 1` to one, so one
+formula handles the whole felt and the 2.70% edge falls out of the zero being on the wheel
+but inside no bet's coverage. The tests sum the return over all 37 pockets for each of the
+fifteen bet types and get exactly `36 × stake` every time — by enumeration, not simulation.
+
+Bets travel as a **type plus a selection**, never as a raw set of numbers, and the engine
+builds the canonical set itself. A split has to name two numbers that actually touch on
+the layout; a corner has to be anchored somewhere a 2×2 block exists. Coverage-derived
+odds mean an invented set would not pay any better, but "the client may describe its own
+wager" is not a property worth having.
+
+### Mines
+
+![Mines](docs/screenshots/mines.png)
+
+A 5×5 grid, between 1 and 24 mines, uncover gems and cash out before you hit a bomb.
+
+The multiplier after `k` safe picks is the exact inverse of the probability of getting
+that far, scaled by the edge — so **every cash-out point is worth exactly the same 0.99**.
+One pick and clearing the whole board have identical expected value; only the variance
+differs. The tests assert that identity to twelve decimal places, for every mine count at
+every depth.
+
+The board is laid at the start and the map stays on the server: revealing is one request
+per tile. Sending the grid and asking the UI not to look would make the game a formality.
+
+The board also comes from a single `shuffle` of the 25 tiles rather than a sample of
+`mines` positions, so a round consumes the same number of draws whatever the mine count —
+the stream position afterwards cannot leak how the player configured it.
+
+### Jacks or Better
+
+![Jacks or Better](docs/screenshots/videopoker.png)
+
+Full-pay 9/6 video poker — nine for a full house, six for a flush — worth about 99.5% to a
+perfect player and comfortably the best value in the building. The royal jumps from 250 per
+coin to 800 at five coins, which is the only reason to ever bet max, and a real one.
+
+The whole deck is shuffled at the deal, so the replacements are fixed *before* the player
+chooses what to hold. That is what stops the draw being chosen after seeing the holds, and
+it means one `(serverSeed, clientSeed, nonce)` replays the entire hand rather than just the
+first five cards. The undrawn deck never leaves the server.
+
+`Ask for the best play` scores all 32 hold patterns. It takes a plain `() => number` and
+therefore *cannot* be handed the fair stream — the structural fix for pysino's bug, where
+pressing the hint button perturbed the very cards it was advising about.
+
+The tests check dealt-hand frequencies against the exact five-card poker odds rather than
+measuring return to player. RTP here is dominated by royal flushes at roughly 1 in 40,000,
+so any sample small enough for CI is really measuring whether a royal happened to land — an
+earlier version of that test failed at 115% having caught one. Measured separately over
+20,000 played hands with the sampling hint: **96.84%**, against 99.54% for perfect play.
 
 ### Blackjack
 
@@ -254,7 +316,7 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Fairness core, engine, accounts, ledger, design system, Dice + Limbo, offline
 - [x] Blackjack, slots, crash — plus the HTTP transport that connects the client to the
       server, and sign-in
-- [ ] Mines, video poker, solo roulette
+- [x] Mines, video poker, solo roulette
 - [ ] Plinko, Hi-Lo, Towers, Wheel of Fortune, slots variety pack
 - [ ] Multiplayer: hold'em tables with bots, shared blackjack and roulette
 - [ ] Leaderboards, profiles, achievements, XP and levels

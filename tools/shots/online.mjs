@@ -70,21 +70,65 @@ if (!signedIn) errors.push('did not reach the lobby after registering');
 console.log(`starting balance                 ${await chips()}`);
 if (OUT) await page.screenshot({ path: `${OUT}/online-lobby.png` });
 
-for (const [game, action] of [['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll']]) {
+/**
+ * A balance that does not move is not proof of failure - a round can legitimately break
+ * even. What cannot be faked is the *ledger*: every real round appends at least a wager
+ * row server-side, so that is what this asserts.
+ */
+const cookieHeader = async () =>
+  (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
+const ledgerCount = async () => {
+  const me = await (await fetch(`${API}/api/me`, { headers: { cookie: await cookieHeader() } })).json();
+  return me.ledger.length;
+};
+
+for (const [game, action] of [
+  ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll'],
+  ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
+]) {
   await page.getByRole('button', { name: new RegExp(game) }).first().click();
   await page.waitForTimeout(300);
   const before = await chips();
+  const ledgerBefore = await ledgerCount();
   await page.getByRole('button', { name: action, exact: true }).click();
   await page.waitForTimeout(1100);
-  const after = await chips();
-  console.log(`${game.padEnd(32)} ${before} -> ${after}${before === after ? '  (UNCHANGED)' : ''}`);
-  if (before === after) errors.push(`${game} did not move the server balance`);
+
+  // Mines needs a tile before it can be cashed out, so play it to a finish.
+  if (game === 'Mines') {
+    const tile = page.getByRole('button', { name: 'tile 1', exact: true });
+    if (await tile.count()) { await tile.click(); await page.waitForTimeout(500); }
+  }
   // Settle anything still open so the next game starts clean.
-  for (const name of ['Stand', 'Cash out', 'No thanks']) {
+  for (const name of ['Stand', 'Cash out ', 'No thanks', 'Draw']) {
     const button = page.getByRole('button', { name: new RegExp(name) });
     if (await button.count()) { await button.first().click(); await page.waitForTimeout(600); }
   }
+
+  const after = await chips();
+  const wrote = (await ledgerCount()) - ledgerBefore;
+  console.log(`${game.padEnd(32)} ${before} -> ${after}   ${wrote} ledger row(s)`);
+  if (wrote < 1) errors.push(`${game} wrote nothing to the ledger`);
+
   if (OUT && game === 'Blackjack') await page.screenshot({ path: `${OUT}/online-blackjack.png` });
+  await page.getByRole('button', { name: /lobby/i }).click();
+  await page.waitForTimeout(300);
+}
+
+// Roulette separately: it is the only game whose UI posts a structured config rather
+// than a single number, so a shape mismatch between client and server shows up here.
+{
+  await page.getByRole('button', { name: /Roulette/ }).first().click();
+  await page.waitForTimeout(300);
+  const before = await chips();
+  const ledgerBefore = await ledgerCount();
+  await page.getByRole('button', { name: '17', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Red$/ }).first().click();
+  await page.getByRole('button', { name: 'Spin', exact: true }).click();
+  await page.waitForTimeout(1100);
+  const wrote = (await ledgerCount()) - ledgerBefore;
+  console.log(`${'Roulette'.padEnd(32)} ${before} -> ${await chips()}   ${wrote} ledger row(s)`);
+  if (wrote < 1) errors.push('Roulette wrote nothing to the ledger');
+  if (OUT) await page.screenshot({ path: `${OUT}/online-roulette.png` });
   await page.getByRole('button', { name: /lobby/i }).click();
   await page.waitForTimeout(300);
 }

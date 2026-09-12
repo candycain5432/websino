@@ -9,14 +9,15 @@
 
 import { commit, FairStream } from '@websino/fair';
 import {
-  blackjack, crash, dice, limbo, shuffleShoe, slots,
-  type BlackjackView, type CrashView, type ShoeState,
+  blackjack, crash, dice, limbo, mines, roulette, shuffleShoe, slots, videopoker,
+  type BlackjackView, type CrashView, type MinesView, type ShoeState,
+  type VideoPokerView,
 } from '@websino/engine';
 import type { RoundGame } from '@websino/engine';
 
 import type {
-  BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport,
-  PlayRequest, PlayResponse,
+  BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, MinesApi,
+  PlayRequest, PlayResponse, VideoPokerApi,
 } from './transport.js';
 
 const WALLET_KEY = 'websino.practice.wallet.v1';
@@ -27,6 +28,7 @@ const GAMES: Record<string, RoundGame<never, unknown>> = {
   dice: dice as unknown as RoundGame<never, unknown>,
   limbo: limbo as unknown as RoundGame<never, unknown>,
   slots: slots as unknown as RoundGame<never, unknown>,
+  roulette: roulette as unknown as RoundGame<never, unknown>,
 };
 
 interface StoredFair {
@@ -51,6 +53,8 @@ interface StoredTables {
     settled: boolean;
   } | null;
   crash: { round: crash.CrashRound; startedAt: number } | null;
+  mines: { round: mines.MinesRound; nonce: number } | null;
+  videopoker: { round: videopoker.VideoPokerRound; nonce: number } | null;
 }
 
 const TABLES_KEY = 'websino.practice.tables.v1';
@@ -94,7 +98,9 @@ export class LocalTransport implements GameTransport {
       clientSeed: 'practice',
       nonce: 0,
     });
-    this.#tables = read<StoredTables>(TABLES_KEY, { blackjack: null, crash: null });
+    this.#tables = read<StoredTables>(TABLES_KEY, {
+      blackjack: null, crash: null, mines: null, videopoker: null,
+    });
     this.#persist();
   }
 
@@ -308,6 +314,118 @@ export class LocalTransport implements GameTransport {
       if (!table) throw new Error('no crash round in progress');
       table.round = crash.cashOutAt(table.round, this.#crashTick());
       return this.#finishCrash();
+    },
+  };
+
+  #minesView(): MinesView {
+    const table = this.#tables.mines;
+    if (!table) throw new Error('no mines board');
+    const round = table.round;
+    const view: MinesView = {
+      state: round.state,
+      bet: round.bet,
+      mines: round.mines,
+      revealed: [...round.revealed],
+      picks: round.revealed.length,
+      multiplier: mines.currentMultiplier(round),
+      payout: mines.currentPayout(round),
+      nextMultiplier: mines.nextMultiplier(round),
+      balance: this.#balance,
+      proof: this.#proofFor(table.nonce),
+    };
+    if (round.state === 'playing') return view;
+    return { ...view, minePositions: [...round.minePositions], hitPosition: round.hitPosition };
+  }
+
+  #finishMines(): MinesView {
+    const table = this.#tables.mines;
+    if (!table) throw new Error('no mines board');
+    this.#balance += mines.currentPayout(table.round);
+    const view = this.#minesView();
+    this.#tables.mines = null;
+    this.#persist();
+    return view;
+  }
+
+  readonly mines: MinesApi = {
+    status: async (): Promise<MinesView | null> =>
+      this.#tables.mines ? this.#minesView() : null,
+
+    start: async (bet: number, mineCount: number): Promise<MinesView> => {
+      if (this.#tables.mines) throw new Error('finish the board in progress first');
+      if (!Number.isInteger(bet) || bet < 1) throw new Error('invalid bet');
+      if (bet > this.#balance) throw new Error('not enough practice chips');
+
+      const { stream, nonce } = this.#takeStream();
+      this.#balance -= bet;
+      this.#tables.mines = { round: mines.startMines(bet, mineCount, stream), nonce };
+      this.#persist();
+      return this.#minesView();
+    },
+
+    reveal: async (position: number): Promise<MinesView> => {
+      const table = this.#tables.mines;
+      if (!table) throw new Error('no mines board in progress');
+      table.round = mines.reveal(table.round, position);
+      if (table.round.state !== 'playing') return this.#finishMines();
+      this.#persist();
+      return this.#minesView();
+    },
+
+    cashOut: async (): Promise<MinesView> => {
+      const table = this.#tables.mines;
+      if (!table) throw new Error('no mines board in progress');
+      table.round = mines.cashOut(table.round);
+      return this.#finishMines();
+    },
+  };
+
+  #videoPokerView(): VideoPokerView {
+    const table = this.#tables.videopoker;
+    if (!table) throw new Error('no video poker hand');
+    const round = table.round;
+    return {
+      phase: round.phase,
+      cards: [...round.cards],
+      held: [...round.held],
+      coins: round.coins,
+      coinValue: round.coinValue,
+      bet: videopoker.betFor(round.coins, round.coinValue),
+      drawn: [...round.drawn],
+      result: round.result,
+      resultName: round.result ? videopoker.HAND_NAMES[round.result] : null,
+      payout: round.payout,
+      balance: this.#balance,
+      proof: this.#proofFor(table.nonce),
+    };
+  }
+
+  readonly videopoker: VideoPokerApi = {
+    status: async (): Promise<VideoPokerView | null> =>
+      this.#tables.videopoker ? this.#videoPokerView() : null,
+
+    deal: async (coins: number, coinValue: number): Promise<VideoPokerView> => {
+      if (this.#tables.videopoker) throw new Error('finish the hand in progress first');
+      const bet = videopoker.betFor(coins, coinValue);
+      if (!Number.isInteger(bet) || bet < 1) throw new Error('invalid bet');
+      if (bet > this.#balance) throw new Error('not enough practice chips');
+
+      const { stream, nonce } = this.#takeStream();
+      this.#balance -= bet;
+      this.#tables.videopoker = { round: videopoker.deal(coins, coinValue, stream), nonce };
+      this.#persist();
+      return this.#videoPokerView();
+    },
+
+    draw: async (held: boolean[]): Promise<VideoPokerView> => {
+      const table = this.#tables.videopoker;
+      if (!table) throw new Error('no video poker hand in progress');
+      table.round = videopoker.drawCards(videopoker.setHolds(table.round, held));
+      this.#balance += table.round.payout;
+      const view = this.#videoPokerView();
+      this.#tables.videopoker = null;
+      this.#persist();
+      return view;
     },
   };
 

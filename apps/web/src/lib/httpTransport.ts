@@ -12,7 +12,8 @@
 
 import type {
   BlackjackAction, BlackjackApi, BlackjackView, CrashApi, CrashView,
-  FairnessState, GameTransport, PlayRequest, PlayResponse,
+  FairnessState, GameTransport, MinesApi, MinesView, PlayRequest, PlayResponse,
+  VideoPokerApi, VideoPokerView,
 } from './transport.js';
 
 export class ApiError extends Error {
@@ -96,5 +97,19 @@ export class HttpTransport implements GameTransport {
     status: () => call<CrashView | null>('/api/crash'),
     start: (bet, autoCashOut) => call<CrashView>('/api/crash/start', 'POST', { bet, autoCashOut }),
     cashOut: () => call<CrashView>('/api/crash/cashout', 'POST', {}),
+  };
+
+  readonly mines: MinesApi = {
+    status: () => call<MinesView | null>('/api/mines'),
+    start: (bet, mines) => call<MinesView>('/api/mines/start', 'POST', { bet, mines }),
+    reveal: (position) => call<MinesView>('/api/mines/reveal', 'POST', { position }),
+    cashOut: () => call<MinesView>('/api/mines/cashout', 'POST', {}),
+  };
+
+  readonly videopoker: VideoPokerApi = {
+    status: () => call<VideoPokerView | null>('/api/videopoker'),
+    deal: (coins, coinValue) =>
+      call<VideoPokerView>('/api/videopoker/deal', 'POST', { coins, coinValue }),
+    draw: (held) => call<VideoPokerView>('/api/videopoker/draw', 'POST', { held }),
   };
 }

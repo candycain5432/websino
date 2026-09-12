@@ -7,10 +7,12 @@
  * offline mode from becoming a second, drifting implementation of the casino.
  */
 
-import type { blackjack, BlackjackView, CrashView } from '@websino/engine';
+import type {
+  blackjack, BlackjackView, CrashView, MinesView, VideoPokerView,
+} from '@websino/engine';
 
 export type BlackjackAction = blackjack.Action;
-export type { BlackjackView, CrashView };
+export type { BlackjackView, CrashView, MinesView, VideoPokerView };
 
 export type PlayMode = 'house' | 'practice';
 
@@ -71,6 +73,21 @@ export interface CrashApi {
   cashOut(): Promise<CrashView>;
 }
 
+export interface MinesApi {
+  status(): Promise<MinesView | null>;
+  start(bet: number, mines: number): Promise<MinesView>;
+  /** One request per tile: the board is never sent while the round is live. */
+  reveal(position: number): Promise<MinesView>;
+  cashOut(): Promise<MinesView>;
+}
+
+export interface VideoPokerApi {
+  status(): Promise<VideoPokerView | null>;
+  deal(coins: number, coinValue: number): Promise<VideoPokerView>;
+  /** Holds travel with the draw, so a dropped call cannot discard kept cards. */
+  draw(held: boolean[]): Promise<VideoPokerView>;
+}
+
 export interface GameTransport {
   readonly mode: PlayMode;
   getBalance(): Promise<number>;
@@ -80,6 +97,8 @@ export interface GameTransport {
   rotateServerSeed(): Promise<FairnessState>;
   readonly blackjack: BlackjackApi;
   readonly crash: CrashApi;
+  readonly mines: MinesApi;
+  readonly videopoker: VideoPokerApi;
   /** Practice mode only - tops the local wallet back up. */
   topUp?(): Promise<number>;
 }
