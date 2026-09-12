@@ -149,9 +149,13 @@ await page.locator('.mines__grid').waitFor({ timeout: 10_000 });
 await page.getByRole('button', { name: 'New board', exact: true }).click();
 await page.waitForTimeout(400);
 // Reveal a few tiles; stop as soon as the board ends.
+//
+// `count()` alone is not enough: hitting a mine settles the board and disables every
+// remaining tile, which stays in the DOM. Clicking one then waits the full thirty
+// seconds for an element that will never become actionable.
 for (let i = 0; i < 4; i += 1) {
   const tile = page.getByRole('button', { name: `tile ${i + 1}`, exact: true });
-  if (!(await tile.count())) break;
+  if (!(await tile.count()) || !(await tile.isEnabled())) break;
   await tile.click();
   await page.waitForTimeout(300);
 }

@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SESSION_COOKIE } from '../src/auth/index.js';
 import { openDatabase, type Db } from '../src/db/index.js';
-import { auditBalances, getBalance } from '../src/db/ledger.js';
+import { auditBalances, getBalance, recentLedger } from '../src/db/ledger.js';
 import { buildServer } from '../src/index.js';
 import type { RoomRegistry, RoomView } from '../src/rooms/registry.js';
 import {
@@ -460,9 +460,22 @@ describe('chip conservation over a long session', () => {
     let total = feltChips();
     let seating = occupancy();
     let now = Date.now();
-    let refills = 0;
+    const moves: number[] = [];
 
-    for (let step = 0; step < TURN_MS * 40 / 500; step += 1) {
+    /**
+     * A third player sits down partway through.
+     *
+     * The first version of this waited for a bot to bust, to prove the check was not
+     * vacuously true - and that depended on how the bots happened to play. Seating a
+     * real person is a seating change on demand, and its effect on the total is exactly
+     * known, which turns "a change was explained" into "the change was this much".
+     */
+    const third = await signUp('conserve_third');
+    const steps = (TURN_MS * 40) / 500;
+
+    for (let step = 0; step < steps; step += 1) {
+      if (step === Math.floor(steps / 2)) rooms.join(third.id, third.username, ROOM, 700);
+
       now += 500;
       rooms.tick(now);
 
@@ -471,16 +484,16 @@ describe('chip conservation over a long session', () => {
       if (nextTotal !== total) {
         // A total that moved has to be explained by a seat that moved with it.
         expect(nextSeating).not.toBe(seating);
-        refills += 1;
+        moves.push(nextTotal - total);
       }
       total = nextTotal;
       seating = nextSeating;
     }
 
     expect(view(first).handsPlayed).toBeGreaterThan(3);
-    // Bots really did bust and get replaced over that stretch, so the check above was
-    // not vacuously true for want of anything happening.
-    expect(refills).toBeGreaterThan(0);
+    // Exactly one change, and exactly the third player's buy-in - so the loop above was
+    // genuinely watching, and nothing else moved the total while cards were being dealt.
+    expect(moves).toEqual([700]);
 
     // Neither wallet moved while the players were seated: chips at a table are not in a
     // wallet, and the only two transfer points are join and leave.
@@ -488,10 +501,31 @@ describe('chip conservation over a long session', () => {
     expect(getBalance(db, second.id)).toBe(STARTING_CHIPS - 800);
     expect(auditBalances(db)).toEqual([]);
 
-    const firstOut = rooms.leave(first.id);
-    const secondOut = rooms.leave(second.id);
-    expect(getBalance(db, first.id)).toBe(STARTING_CHIPS - 800 + firstOut.cashedOut);
-    expect(getBalance(db, second.id)).toBe(STARTING_CHIPS - 800 + secondOut.cashedOut);
+    // Everyone stands up. A queued leave is honoured by the tick, so drive it until
+    // the floor is empty of humans rather than assuming one call finishes the job.
+    const buyIns: Record<string, number> = { [first.id]: 800, [second.id]: 800, [third.id]: 700 };
+    for (const player of [first, second, third]) rooms.leave(player.id);
+
+    // Drive until the floor is empty rather than for a fixed stretch. A queued leave is
+    // honoured between hands, and how long the hand in progress has left to run is not
+    // something this test should be guessing at.
+    const seated = () => [first, second, third].filter((p) => rooms.findSeat(p.id) !== null);
+    for (let step = 0; step < 400 && seated().length > 0; step += 1) {
+      now += 500;
+      rooms.tick(now);
+    }
+    expect(seated()).toEqual([]);
+
+    for (const player of [first, second, third]) {
+      expect(rooms.findSeat(player.id)).toBeNull();
+      const payouts = recentLedger(db, player.id, 20).filter((row) => row.reason === 'payout');
+      const wagers = recentLedger(db, player.id, 20).filter((row) => row.reason === 'wager');
+      expect(wagers.map((row) => row.delta)).toEqual([-(buyIns[player.id] ?? 0)]);
+      expect(payouts).toHaveLength(1);
+      expect(getBalance(db, player.id)).toBe(
+        STARTING_CHIPS - (buyIns[player.id] ?? 0) + (payouts[0]?.delta ?? 0),
+      );
+    }
     expect(auditBalances(db)).toEqual([]);
   });
 });

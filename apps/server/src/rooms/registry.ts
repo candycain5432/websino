@@ -203,8 +203,10 @@ export class RoomRegistry {
     if (!found) throw new RoomError('you are not seated at a table');
     const room = this.get(found.roomId);
 
-    const player = room.table.players[found.seat] as holdem.HoldemPlayer;
-    if (holdem.inHand(player) && room.table.handInProgress) {
+    // Queued whenever a hand is running, not just when the caller is still in it: a
+    // folded seat's committed chips are in the live pot too, and cashing it out would
+    // clear them from the pot rather than pay them to whoever wins it.
+    if (room.table.handInProgress) {
       requestLeave(room, found.seat);
       this.#save(room);
       return { pending: true, balance: getBalance(this.#db, userId), cashedOut: 0 };
@@ -224,7 +226,7 @@ export class RoomRegistry {
 
     if (room.table.toAct !== found.seat) throw new RoomError('it is not your turn');
     holdem.act(room.table, action, amount);
-    this.#advance(room);
+    this.#advance(room, Date.now());
     this.#save(room);
     return this.view(room, userId);
   }
@@ -275,9 +277,26 @@ export class RoomRegistry {
       }
 
       if (room.table.handInProgress) {
+        const toAct = room.table.toAct;
+        const occupant = toAct === null ? null : room.occupants[toAct];
+        /**
+         * Someone who asked to stand up does not get twenty seconds.
+         *
+         * They have already decided; the clock exists to give a player time to decide.
+         * Holding the table for them on every remaining street means five other people
+         * waiting a minute for someone who has left the building - and they cannot be
+         * stood up yet, because their chips are in a live pot.
+         */
+        const away = occupant?.kind === 'human' && occupant.leaving === true;
+
         // A bot on the clock acts at once; there is nothing to wait for.
-        if (room.table.toAct !== null && room.occupants[room.table.toAct]?.kind === 'bot') {
-          this.#advance(room);
+        if (toAct !== null && (occupant?.kind === 'bot' || away)) {
+          if (away) {
+            holdem.act(room.table, timeoutAction(room));
+            this.#advance(room, now);
+          } else {
+            this.#advance(room, now);
+          }
           changed = true;
         } else if (room.deadline !== null && now >= room.deadline) {
           // A human ran out of time. Check if free, fold if not.
@@ -291,11 +310,11 @@ export class RoomRegistry {
             const name = (room.table.players[seat] as holdem.HoldemPlayer).name;
             room.table.log.push(`${name} ran out of time and ${action}ed`);
           }
-          this.#advance(room);
+          this.#advance(room, now);
           changed = true;
         }
       } else if (room.nextHandAt !== null && now >= room.nextHandAt) {
-        if (this.#tryDeal(room)) changed = true;
+        if (this.#tryDeal(room, now)) changed = true;
       }
 
       if (changed) this.#save(room);
@@ -347,7 +366,7 @@ export class RoomRegistry {
   }
 
   /** Deal if the table can support a hand. Returns whether anything happened. */
-  #tryDeal(room: RoomState): boolean {
+  #tryDeal(room: RoomState, now: number): boolean {
     // Anyone who was waiting can be dealt in now.
     for (const seat of room.waiting) {
       const player = room.table.players[seat] as holdem.HoldemPlayer;
@@ -362,7 +381,7 @@ export class RoomRegistry {
       return false;
     }
     if (playableSeats(room).length < 2) {
-      room.nextHandAt = Date.now() + BETWEEN_HANDS_MS;
+      room.nextHandAt = now + BETWEEN_HANDS_MS;
       return false;
     }
 
@@ -377,7 +396,7 @@ export class RoomRegistry {
     holdem.dealHand(room.table, stream);
     room.handsPlayed += 1;
     room.nextHandAt = null;
-    this.#advance(room);
+    this.#advance(room, now);
     return true;
   }
 
@@ -386,15 +405,21 @@ export class RoomRegistry {
    *
    * Bounded rather than `while (true)` - a bug that stopped advancing would otherwise
    * spin a timer callback forever rather than surfacing.
+   *
+   * `now` is threaded in rather than read from the clock, so every deadline this arms is
+   * measured from the instant the tick is processing. Reading `Date.now()` here instead
+   * made a twenty-second turn occasionally twenty seconds and one millisecond - harmless
+   * in itself, but it meant a tick handed an explicit instant was not actually driven by
+   * it, which is the one property both the tests and a caught-up tick depend on.
    */
-  #advance(room: RoomState): void {
+  #advance(room: RoomState, now: number): void {
     const random = createCasualSource(room.botSeed);
     room.botSeed = (room.botSeed * 1_103_515_245 + 12_345) >>> 0;
 
     for (let guard = 0; guard < 400; guard += 1) {
       if (holdem.isHandOver(room.table)) {
         room.deadline = null;
-        if (room.nextHandAt === null) room.nextHandAt = Date.now() + BETWEEN_HANDS_MS;
+        if (room.nextHandAt === null) room.nextHandAt = now + BETWEEN_HANDS_MS;
         return;
       }
       const seat = room.table.toAct;
@@ -403,7 +428,7 @@ export class RoomRegistry {
         return;
       }
       if (room.occupants[seat]?.kind !== 'bot') {
-        armClock(room);
+        armClock(room, now);
         return;
       }
       holdem.playBotTurn(room.table, random);

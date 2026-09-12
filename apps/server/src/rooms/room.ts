@@ -300,14 +300,21 @@ export function setConnected(room: RoomState, seat: number, connected: boolean):
   occupant.disconnectedAt = connected ? null : Date.now();
 }
 
-/** Seats whose grace period has run out and should be stood up. */
+/**
+ * Seats whose grace period has run out and should be stood up.
+ *
+ * Never during a hand. "Not in the hand" is not good enough: a player who folded still
+ * has their `committed` chips in the live pot, and standing a seat up clears
+ * `committed` - which would shrink the pot and destroy those chips. Every exit from a
+ * table therefore waits for the hand to finish, which is also the only moment the chips
+ * in front of a seat are unambiguously that seat's.
+ */
 export function expiredSeats(room: RoomState, now = Date.now()): number[] {
+  if (room.table.handInProgress) return [];
   return humanSeats(room).filter((seat) => {
     const occupant = room.occupants[seat];
     if (!occupant || occupant.kind !== 'human' || occupant.connected) return false;
     if (occupant.disconnectedAt === null) return false;
-    // Never pull somebody out of a live hand - their chips are in the pot.
-    if (holdem.inHand(room.table.players[seat] as holdem.HoldemPlayer)) return false;
     return now - occupant.disconnectedAt > DISCONNECT_GRACE_MS;
   });
 }
