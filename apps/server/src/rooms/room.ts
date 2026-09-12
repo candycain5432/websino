@@ -37,8 +37,16 @@ export const BETWEEN_HANDS_MS = 4_000;
 
 export const SMALL_BLIND = 10;
 export const BIG_BLIND = 20;
-export const MIN_BUY_IN = 200;
-export const MAX_BUY_IN = 5_000;
+/**
+ * Buy-in range, in big blinds: 10 to 100.
+ *
+ * The cap was 5,000 (250 BB) while a new account starts with 1,000, so the lobby
+ * advertised a maximum nobody could afford. 100 big blinds is the standard cap for a
+ * no-limit cash game anyway, which makes it the right number rather than merely a
+ * reachable one.
+ */
+export const MIN_BUY_IN = SMALL_BLIND * 20;
+export const MAX_BUY_IN = BIG_BLIND * 100;
 
 export type Occupant =
   | {
@@ -85,6 +93,16 @@ export interface RoomState {
   /** Serial for bot identities. Only ever increments. */
   botsSeated: number;
   handsPlayed: number;
+  /**
+   * Every chip the house has taken from this table.
+   *
+   * Not decoration: the rake is the only way chips leave a table without a seat
+   * changing, so `totalChips + rakeCollected` is the quantity that is actually
+   * conserved, and a test asserts exactly that.
+   */
+  rakeCollected: number;
+  /** The last hand whose rake has been counted, so it is counted once. */
+  rakedHand: number;
 }
 
 /**
@@ -111,6 +129,8 @@ export function createRoom(id: string, name: string): RoomState {
     botSeed: (Date.now() ^ 0x5f3759df) >>> 0,
     botsSeated: 0,
     handsPlayed: 0,
+    rakeCollected: 0,
+    rakedHand: 0,
   };
 }
 

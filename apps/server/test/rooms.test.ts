@@ -81,6 +81,15 @@ const feltChips = (): number => {
   return room.table.players.reduce((sum, p) => sum + p.chips + p.committed, 0);
 };
 
+/**
+ * The quantity that is actually conserved.
+ *
+ * The rake is the one way chips leave a table without a seat changing, so counting what
+ * the house has taken alongside what is on the felt gives back a total that may only
+ * move when somebody sits down or stands up.
+ */
+const feltPlusRake = (): number => feltChips() + rooms.get(ROOM).rakeCollected;
+
 // ------------------------------------------------------------- seats & chips --
 
 describe('taking a seat', () => {
@@ -443,7 +452,8 @@ describe('chip conservation over a long session', () => {
    * shape of the bug that let pysino mint 4,918 chips out of a bad refund.
    *
    * So: totals are allowed to move on exactly the ticks where the seating changed, and
-   * nowhere else.
+   * nowhere else - counting the rake as still on the table, since the house taking a
+   * cut is a transfer out of the pot rather than chips going missing.
    */
   it('only ever changes the table total when a seat changes', async () => {
     const first = await signUp('conserve_first');
@@ -457,7 +467,7 @@ describe('chip conservation over a long session', () => {
     const occupancy = (): string =>
       view(null).seats.map((seat) => seat.occupantId ?? '-').join('|');
 
-    let total = feltChips();
+    let total = feltPlusRake();
     let seating = occupancy();
     let now = Date.now();
     const moves: number[] = [];
@@ -479,7 +489,7 @@ describe('chip conservation over a long session', () => {
       now += 500;
       rooms.tick(now);
 
-      const nextTotal = feltChips();
+      const nextTotal = feltPlusRake();
       const nextSeating = occupancy();
       if (nextTotal !== total) {
         // A total that moved has to be explained by a seat that moved with it.
@@ -494,6 +504,9 @@ describe('chip conservation over a long session', () => {
     // Exactly one change, and exactly the third player's buy-in - so the loop above was
     // genuinely watching, and nothing else moved the total while cards were being dealt.
     expect(moves).toEqual([700]);
+    // And the house really was taking a cut over that stretch, so the rake term above
+    // was carrying weight rather than sitting at zero.
+    expect(rooms.get(ROOM).rakeCollected).toBeGreaterThan(0);
 
     // Neither wallet moved while the players were seated: chips at a table are not in a
     // wallet, and the only two transfer points are join and leave.

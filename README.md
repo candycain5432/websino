@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 516 tests
+pnpm test         # 522 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -43,7 +43,7 @@ Node 22+ and pnpm 10+.
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 516, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 522, covering payout maths, chip conservation and seed secrecy |
 
 Plinko, Hi-Lo, Towers, Wheel of Fortune and shared-table blackjack and roulette are next
 — see [Roadmap](#roadmap).
@@ -80,6 +80,21 @@ a player folding their blind would look like it created a side pot.
 Bots take a `CasualSource`. Handing one the fair stream is a **compile error**, not a code
 review catch — pysino's equity estimator drew from the deal's own generator, so a bot
 thinking perturbed the cards still to come.
+
+**The house takes a rake**: 5% of the pot, capped at 3 big blinds, and **no flop, no
+drop** — a hand that ends before the flop is free, because otherwise players pay to fold
+their blinds, which is the one thing that genuinely drives people off a table.
+
+This exists to fix a real economy hole rather than for flavour. Bots rebuy with
+house-funded stacks, so without a rake a table was a *source* of chips: beat the bots,
+cash out, and you had taken chips that were created for you. Hold'em was also the only
+game here with no house edge, while everything else takes between 0.5% and 5%. A rake is
+how an actual card room solves exactly this, and it makes the table consistent with the
+rest of the casino.
+
+It is shown, not hidden — the felt says what the house took — and it is the *only* way
+chips may leave a table. That makes the tested invariant an exact one: chips on the felt
+plus chips the house has taken may only change when somebody sits down or stands up.
 
 ### Shared tables
 
@@ -418,12 +433,35 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Blackjack, slots, crash — plus the HTTP transport that connects the client to the
       server, and sign-in
 - [x] Mines, video poker, solo roulette
-- [ ] Plinko, Hi-Lo, Towers, Wheel of Fortune, slots variety pack
-- [x] Hold'em against bots
+- [ ] Plinko, Hi-Lo, Towers, Wheel of Fortune (solo), slots variety pack
+- [ ] Bingo as a shared round
+- [x] Hold'em against bots, with a rake so the table is a sink rather than a faucet
 - [x] Shared tables: several humans at one hold'em table
 - [ ] Shared-table blackjack and roulette
 - [ ] Leaderboards, profiles, achievements, XP and levels
 - [ ] PWA install, sound, animation pass
+
+---
+
+## Decisions worth knowing about
+
+Two questions came up while building the shared tables that were genuinely open. Both are
+settled now, and both are cheap to revisit.
+
+**Bingo is a shared round; Wheel of Fortune is solo.** Multiplayer was scoped to
+Hold'em, Blackjack and Roulette, and both of these looked like they contradicted that.
+They do not have to. Wheel of Fortune is a weighted spin with no other players in it —
+mechanically a slot, and perfectly good solo, so it adds no multiplayer surface at all.
+Bingo genuinely is pointless alone; the whole game is the race. So it becomes a *shared
+round* rather than a shared table: everyone buys cards, one ball sequence is drawn for
+all of them, first to a pattern wins. That needs no seats, no turn clock and none of the
+hold'em machinery — it reuses the room tick and nothing else.
+
+**Bots stay a chip faucet, and the rake is the counterweight.** Removing bot rebuys
+would starve tables, and capping them is fiddly for no real gain. Taking a rake instead
+means a player has to beat both the bots and the house cut to profit, which is the same
+deal every other game in the casino already offers. See
+[Texas Hold'em](#texas-holdem) for the numbers.
 
 ---
 

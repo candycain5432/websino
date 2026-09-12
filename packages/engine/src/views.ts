@@ -137,6 +137,8 @@ export interface HoldemView {
     wentToShowdown: boolean;
     winners: number[];
     pots: Array<{ amount: number; eligible: number[]; isSide: boolean }>;
+    /** What the house took from this hand. Shown, not hidden - it is the player's cost. */
+    rake: number;
   } | null;
   balance: number;
   proof: { serverSeedHash: string; nonce: number };
@@ -209,7 +211,7 @@ export interface RoomView {
   handNumber: number;
   handsPlayed: number;
   log: string[];
-  result: { wentToShowdown: boolean; winners: number[] } | null;
+  result: { wentToShowdown: boolean; winners: number[]; rake: number } | null;
   balance: number;
 }
 
