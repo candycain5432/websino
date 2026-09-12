@@ -7,6 +7,11 @@
  * offline mode from becoming a second, drifting implementation of the casino.
  */
 
+import type { blackjack, BlackjackView, CrashView } from '@websino/engine';
+
+export type BlackjackAction = blackjack.Action;
+export type { BlackjackView, CrashView };
+
 export type PlayMode = 'house' | 'practice';
 
 export interface PlayRequest {
@@ -46,6 +51,26 @@ export interface FairnessState {
   };
 }
 
+/**
+ * Games that span several requests get their own sub-interface rather than being forced
+ * through `play()`. A blackjack hand is a conversation and a crash round is a race
+ * against a clock; pretending either is a one-shot round would mean encoding a verb in
+ * the config object, which is how transports turn into RPC soup.
+ */
+export interface BlackjackApi {
+  /** The hand in progress, or null if there is none. */
+  status(): Promise<BlackjackView | null>;
+  deal(bet: number): Promise<BlackjackView>;
+  act(action: BlackjackAction): Promise<BlackjackView>;
+  insurance(buy: boolean): Promise<BlackjackView>;
+}
+
+export interface CrashApi {
+  status(): Promise<CrashView | null>;
+  start(bet: number, autoCashOut: number | null): Promise<CrashView>;
+  cashOut(): Promise<CrashView>;
+}
+
 export interface GameTransport {
   readonly mode: PlayMode;
   getBalance(): Promise<number>;
@@ -53,6 +78,8 @@ export interface GameTransport {
   getFairness(): Promise<FairnessState>;
   setClientSeed(clientSeed: string): Promise<FairnessState>;
   rotateServerSeed(): Promise<FairnessState>;
+  readonly blackjack: BlackjackApi;
+  readonly crash: CrashApi;
   /** Practice mode only - tops the local wallet back up. */
   topUp?(): Promise<number>;
 }

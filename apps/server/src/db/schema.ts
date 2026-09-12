@@ -100,6 +100,34 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    id: 2,
+    name: 'game_sessions',
+    sql: `
+      -- Multi-request games: blackjack (a hand spans several decisions) and crash
+      -- (a round spans wall-clock time). state_json holds SECRETS - the shuffled shoe
+      -- and the crash point - and is never sent to a client. Every response is built
+      -- by a redaction function that omits what the player has not earned yet.
+      --
+      -- Persisted rather than held in memory because the stake is debited the moment
+      -- a round opens: a restart with in-memory state would silently eat live bets.
+      CREATE TABLE game_sessions (
+        id           TEXT PRIMARY KEY,
+        user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        game         TEXT NOT NULL,
+        state_json   TEXT NOT NULL,
+        seed_pair_id TEXT NOT NULL REFERENCES seed_pairs(id),
+        nonce        INTEGER NOT NULL,
+        staked       INTEGER NOT NULL DEFAULT 0,
+        started_at   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL,
+        closed_at    INTEGER
+      );
+      -- At most one open session per game per player.
+      CREATE UNIQUE INDEX game_sessions_open
+        ON game_sessions(user_id, game) WHERE closed_at IS NULL;
+    `,
+  },
 ];
 
 export function migrate(db: Database): void {

@@ -17,9 +17,12 @@
 .card__inner {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-areas: 'tl . .' '. pip .' '. . br';
-  align-items: center;
+  /*
+   * The corners are positioned, not laid out in a grid. They used to be grid areas
+   * whose columns were sized by their content, so a two-character "10" plus the centre
+   * pip added up to more than the card was wide and the bottom-right corner spilled off
+   * the edge - visible only on tens, and only at the large size.
+   */
   border-radius: inherit;
   background: var(--card-face);
   box-shadow: var(--shadow), inset 0 0 0 1px var(--card-edge);
@@ -32,22 +35,32 @@
 .card--black { color: var(--card-black); }
 
 .card__corner {
+  position: absolute;
   display: grid;
   justify-items: center;
   line-height: 0.95;
   font-weight: 700;
   font-size: calc(var(--card-w) * 0.2);
-  padding: calc(var(--card-w) * 0.07);
 }
 
-.card__corner--tl { grid-area: tl; align-self: start; justify-self: start; }
-.card__corner--br { grid-area: br; align-self: end;   justify-self: end; rotate: 180deg; }
+.card__corner--tl {
+  inset-block-start: calc(var(--card-w) * 0.07);
+  inset-inline-start: calc(var(--card-w) * 0.07);
+}
+
+.card__corner--br {
+  inset-block-end: calc(var(--card-w) * 0.07);
+  inset-inline-end: calc(var(--card-w) * 0.07);
+  rotate: 180deg;
+}
 
 .card__suit { font-size: calc(var(--card-w) * 0.17); }
 
 .card__pip {
-  grid-area: pip;
-  justify-self: center;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   font-size: calc(var(--card-w) * 0.44);
   line-height: 1;
 }

@@ -1,9 +1,11 @@
 /**
  * The Websino server: accounts, chips and one-shot game rounds.
  *
- * Stateful and multiplayer games (crash, blackjack, hold'em tables) will need a
- * WebSocket layer. Dice, limbo, slots and friends resolve in a single request, so they
- * go over plain HTTP and skip that machinery entirely.
+ * Dice, limbo and slots resolve in a single request. Blackjack and crash span several,
+ * so they keep server-held state in `sessions.ts` - but they are still request/response,
+ * because only one player is at the table. A WebSocket layer is what *shared* tables
+ * need (hold'em, and later shared blackjack and roulette), and it can wait until there
+ * is something to broadcast.
  */
 
 import cookie from '@fastify/cookie';
@@ -11,13 +13,17 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { z } from 'zod';
 
-import { InvalidBetError } from '@websino/engine';
+import { blackjack, InvalidBetError } from '@websino/engine';
 
 import { AuthError, SESSION_COOKIE, createSession, destroySession, login, register, resolveSession } from './auth/index.js';
 import { openDatabase, type Db } from './db/index.js';
 import { auditBalances, getBalance, InsufficientChipsError, recentLedger } from './db/ledger.js';
 import { publicState, rotate, setClientSeed } from './fair/seeds.js';
 import { GAMES, playRound } from './rounds.js';
+import {
+  actBlackjack, blackjackStatus, cashOutCrash, crashStatus, dealBlackjack,
+  insureBlackjack, NoSuchSessionError, SessionConflictError, startCrashRound,
+} from './sessions.js';
 
 const credentials = z.object({
   username: z.string().min(1).max(64),
@@ -57,6 +63,13 @@ export async function buildServer(db: Db = openDatabase()) {
     // A rejected stake or an out-of-range game config is the client's fault, not ours.
     if (error instanceof InvalidBetError) return reply.code(400).send({ error: message });
     if (error instanceof z.ZodError) return reply.code(400).send({ error: 'bad request' });
+    if (error instanceof NoSuchSessionError) return reply.code(409).send({ error: message });
+    if (error instanceof SessionConflictError) return reply.code(409).send({ error: message });
+    // An illegal move is the client's mistake. Answering 500 would both mislead the
+    // client and bury genuine server faults in the log.
+    if (error instanceof blackjack.IllegalActionError) {
+      return reply.code(400).send({ error: message });
+    }
 
     // Anything unexpected is logged server-side but never echoed back - an internal
     // message could leak schema or filesystem details.
@@ -125,6 +138,48 @@ export async function buildServer(db: Db = openDatabase()) {
   });
 
   app.post('/api/fair/rotate', async (request) => rotate(db, requireUser(request).id));
+
+  // ---------------------------------------------------------------- crash --
+  // A round advances with the wall clock, so it needs its own endpoints. The client
+  // animates the curve locally but never decides the outcome: the server dates every
+  // cash-out by its own clock and holds the crash point until the round is over.
+  app.post('/api/crash/start', async (request) => {
+    const user = requireUser(request);
+    const body = z
+      .object({
+        bet: z.number().int().positive(),
+        autoCashOut: z.number().int().min(101).nullable().default(null),
+      })
+      .parse(request.body);
+    return startCrashRound(db, user.id, body.bet, body.autoCashOut);
+  });
+
+  app.post('/api/crash/cashout', async (request) => cashOutCrash(db, requireUser(request).id));
+
+  app.get('/api/crash', async (request) => crashStatus(db, requireUser(request).id));
+
+  // ------------------------------------------------------------ blackjack --
+  app.post('/api/blackjack/deal', async (request) => {
+    const user = requireUser(request);
+    const { bet } = z.object({ bet: z.number().int().positive() }).parse(request.body);
+    return dealBlackjack(db, user.id, bet);
+  });
+
+  app.post('/api/blackjack/action', async (request) => {
+    const user = requireUser(request);
+    const { action } = z
+      .object({ action: z.enum(['hit', 'stand', 'double', 'split', 'surrender']) })
+      .parse(request.body);
+    return actBlackjack(db, user.id, action);
+  });
+
+  app.post('/api/blackjack/insurance', async (request) => {
+    const user = requireUser(request);
+    const { buy } = z.object({ buy: z.boolean() }).parse(request.body);
+    return insureBlackjack(db, user.id, buy);
+  });
+
+  app.get('/api/blackjack', async (request) => blackjackStatus(db, requireUser(request).id));
 
   return app;
 }
