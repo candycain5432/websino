@@ -200,6 +200,40 @@ await page.getByRole('button', { name: /^Spin for/ }).click();
 await page.waitForTimeout(3_200);
 await shot('28-wheel-settled');
 
+console.log('hi-lo');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Hi-Lo/ }).first().click();
+await page.locator('.hilo').waitFor({ timeout: 10_000 });
+await page.getByRole('button', { name: /^Deal for/ }).click();
+await page.waitForTimeout(500);
+await shot('29-hilo');
+for (let i = 0; i < 3; i += 1) {
+  const higher = page.getByRole('button', { name: /Higher or same/ });
+  if (!(await higher.count()) || !(await higher.isEnabled())) break;
+  await higher.click();
+  await page.waitForTimeout(450);
+}
+await shot('30-hilo-played');
+
+console.log('towers');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Towers/ }).first().click();
+await page.locator('.towers').waitFor({ timeout: 10_000 });
+await page.getByRole('button', { name: /^Climb for/ }).click();
+await page.waitForTimeout(500);
+await shot('31-towers');
+for (let i = 0; i < 4; i += 1) {
+  // Always the first tile of whichever row is live; a trap ends it, which is a
+  // perfectly good screenshot too.
+  const tile = page.locator('.rung.is-active .rung__tile').first();
+  if (!(await tile.count()) || !(await tile.isEnabled())) break;
+  await tile.click();
+  await page.waitForTimeout(450);
+}
+await shot('32-towers-played');
+
 console.log("hold'em");
 await page.getByRole('button', { name: /lobby/i }).click();
 await page.waitForTimeout(300);

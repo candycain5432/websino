@@ -21,9 +21,9 @@ import { randomUUID } from 'node:crypto';
 
 import { createCasualSource } from '@websino/fair';
 import {
-  assertValidBet, blackjack, crash, holdem, mines, shuffleShoe, videopoker,
+  assertValidBet, blackjack, crash, hilo, holdem, mines, shuffleShoe, towers, videopoker,
   type BlackjackView, type CrashView, type HoldemSeatView, type HoldemView,
-  type MinesView, type ShoeState, type VideoPokerView,
+  type HiLoView, type MinesView, type ShoeState, type TowersView, type VideoPokerView,
 } from '@websino/engine';
 
 import type { Db } from './db/index.js';
@@ -508,6 +508,227 @@ export function minesStatus(db: Db, userId: string): MinesView | null {
   const row = openSession(db, userId, 'mines');
   if (!row) return null;
   return minesView(db, userId, row, JSON.parse(row.state_json) as MinesState);
+}
+
+// ---------------------------------------------------------------------- hi-lo --
+
+interface HiLoState {
+  round: hilo.HiLoRound;
+}
+
+/**
+ * The whole run is drawn at `start`; only what has been turned over ships.
+ *
+ * `round.cards` holds every card the streak could reach. Sending the ones the player has
+ * not reached yet would hand them the answer to the question the game is asking, so the
+ * view is built from the current card and the history and nothing else.
+ */
+function hiloView(db: Db, userId: string, row: SessionRow, state: HiLoState): HiLoView {
+  const round = state.round;
+  const seed = db
+    .prepare('SELECT server_seed_hash FROM seed_pairs WHERE id = ?')
+    .get(row.seed_pair_id) as { server_seed_hash: string };
+
+  const current = hilo.currentCard(round);
+  return {
+    state: round.state,
+    bet: round.bet,
+    opening: round.cards[0] as number,
+    current,
+    history: round.history.map((step) => ({ ...step })),
+    steps: round.history.length,
+    multiplier: round.multiplier,
+    payout: hilo.currentPayout(round),
+    odds: {
+      higher: {
+        chance: hilo.winChance(current, 'higher'),
+        multiplier: hilo.stepMultiplier(current, 'higher'),
+      },
+      lower: {
+        chance: hilo.winChance(current, 'lower'),
+        multiplier: hilo.stepMultiplier(current, 'lower'),
+      },
+    },
+    capped: hilo.isCapped(round),
+    maxSteps: hilo.MAX_STEPS,
+    balance: getBalance(db, userId),
+    proof: { serverSeedHash: seed.server_seed_hash, nonce: row.nonce },
+  };
+}
+
+function finishHiLo(db: Db, userId: string, row: SessionRow, state: HiLoState): HiLoView {
+  const payout = hilo.currentPayout(state.round);
+  saveState(db, row.id, state);
+  if (payout > 0) applyLedger(db, userId, [{ delta: payout, reason: 'payout' }]);
+  recordRound(
+    db, userId, 'hilo', row, row.staked, payout,
+    {},
+    {
+      history: state.round.history,
+      multiplier: state.round.multiplier,
+      state: state.round.state,
+    },
+  );
+  closeSession(db, row.id);
+  return hiloView(db, userId, row, state);
+}
+
+export function startHiLoRound(db: Db, userId: string, bet: number): HiLoView {
+  if (openSession(db, userId, 'hilo')) {
+    throw new SessionConflictError('finish the run in progress first');
+  }
+  assertValidBet(bet, getBalance(db, userId));
+
+  const { stream, seedPairId, nonce } = takeStream(db, userId);
+  const state: HiLoState = { round: hilo.startHiLo(bet, stream) };
+  const id = randomUUID();
+  const now = Date.now();
+
+  applyLedger(db, userId, [{ delta: -bet, reason: 'wager' }]);
+  db.prepare(
+    `INSERT INTO game_sessions (id, user_id, game, state_json, seed_pair_id, nonce,
+                                staked, started_at, updated_at)
+     VALUES (?, ?, 'hilo', ?, ?, ?, ?, ?, ?)`,
+  ).run(id, userId, JSON.stringify(state), seedPairId, nonce, bet, now, now);
+
+  return hiloView(
+    db, userId,
+    { id, game: 'hilo', state_json: '', seed_pair_id: seedPairId, nonce, staked: bet, started_at: now },
+    state,
+  );
+}
+
+export function guessHiLo(db: Db, userId: string, choice: hilo.HiLoGuess): HiLoView {
+  const row = openSession(db, userId, 'hilo');
+  if (!row) throw new NoSuchSessionError('hilo');
+  const state = JSON.parse(row.state_json) as HiLoState;
+  state.round = hilo.guess(state.round, choice);
+  saveState(db, row.id, state);
+
+  // A wrong guess ends it; so does hitting the cap, which cashes out where it stands.
+  if (state.round.state !== 'playing') return finishHiLo(db, userId, row, state);
+  return hiloView(db, userId, row, state);
+}
+
+export function cashOutHiLo(db: Db, userId: string): HiLoView {
+  const row = openSession(db, userId, 'hilo');
+  if (!row) throw new NoSuchSessionError('hilo');
+  const state = JSON.parse(row.state_json) as HiLoState;
+  state.round = hilo.cashOut(state.round);
+  return finishHiLo(db, userId, row, state);
+}
+
+export function hiloStatus(db: Db, userId: string): HiLoView | null {
+  const row = openSession(db, userId, 'hilo');
+  if (!row) return null;
+  return hiloView(db, userId, row, JSON.parse(row.state_json) as HiLoState);
+}
+
+// --------------------------------------------------------------------- towers --
+
+interface TowersState {
+  round: towers.TowersRound;
+}
+
+/** The trap map stays here until the round ends, exactly as mines' board does. */
+function towersView(db: Db, userId: string, row: SessionRow, state: TowersState): TowersView {
+  const round = state.round;
+  const seed = db
+    .prepare('SELECT server_seed_hash FROM seed_pairs WHERE id = ?')
+    .get(row.seed_pair_id) as { server_seed_hash: string };
+
+  const view: TowersView = {
+    state: round.state,
+    bet: round.bet,
+    difficulty: round.difficulty,
+    tiles: towers.tilesPerRow(round.difficulty),
+    traps: towers.trapsPerRow(round.difficulty),
+    rows: towers.ROWS,
+    picks: [...round.picks],
+    multiplier: towers.currentMultiplier(round),
+    payout: towers.currentPayout(round),
+    nextMultiplier: towers.nextMultiplier(round),
+    table: towers.multiplierTable(round.difficulty),
+    balance: getBalance(db, userId),
+    proof: { serverSeedHash: seed.server_seed_hash, nonce: row.nonce },
+  };
+
+  if (round.state === 'playing') return view;
+  return { ...view, trapMap: round.traps.map((r) => [...r]), hit: round.hit };
+}
+
+function finishTowers(db: Db, userId: string, row: SessionRow, state: TowersState): TowersView {
+  const payout = towers.currentPayout(state.round);
+  saveState(db, row.id, state);
+  if (payout > 0) applyLedger(db, userId, [{ delta: payout, reason: 'payout' }]);
+  recordRound(
+    db, userId, 'towers', row, row.staked, payout,
+    { difficulty: state.round.difficulty },
+    {
+      picks: state.round.picks,
+      traps: state.round.traps,
+      hit: state.round.hit,
+      state: state.round.state,
+    },
+  );
+  closeSession(db, row.id);
+  return towersView(db, userId, row, state);
+}
+
+export function startTowersRound(
+  db: Db,
+  userId: string,
+  bet: number,
+  difficulty: towers.Difficulty,
+): TowersView {
+  if (openSession(db, userId, 'towers')) {
+    throw new SessionConflictError('finish the tower in progress first');
+  }
+  assertValidBet(bet, getBalance(db, userId));
+
+  const { stream, seedPairId, nonce } = takeStream(db, userId);
+  const state: TowersState = { round: towers.startTowers(bet, difficulty, stream) };
+  const id = randomUUID();
+  const now = Date.now();
+
+  applyLedger(db, userId, [{ delta: -bet, reason: 'wager' }]);
+  db.prepare(
+    `INSERT INTO game_sessions (id, user_id, game, state_json, seed_pair_id, nonce,
+                                staked, started_at, updated_at)
+     VALUES (?, ?, 'towers', ?, ?, ?, ?, ?, ?)`,
+  ).run(id, userId, JSON.stringify(state), seedPairId, nonce, bet, now, now);
+
+  return towersView(
+    db, userId,
+    { id, game: 'towers', state_json: '', seed_pair_id: seedPairId, nonce, staked: bet, started_at: now },
+    state,
+  );
+}
+
+export function climbTowers(db: Db, userId: string, tile: number): TowersView {
+  const row = openSession(db, userId, 'towers');
+  if (!row) throw new NoSuchSessionError('towers');
+  const state = JSON.parse(row.state_json) as TowersState;
+  state.round = towers.climb(state.round, tile);
+  saveState(db, row.id, state);
+
+  // A trap ends it; so does reaching the top, which cashes out at the highest rung.
+  if (state.round.state !== 'playing') return finishTowers(db, userId, row, state);
+  return towersView(db, userId, row, state);
+}
+
+export function cashOutTowers(db: Db, userId: string): TowersView {
+  const row = openSession(db, userId, 'towers');
+  if (!row) throw new NoSuchSessionError('towers');
+  const state = JSON.parse(row.state_json) as TowersState;
+  state.round = towers.cashOut(state.round);
+  return finishTowers(db, userId, row, state);
+}
+
+export function towersStatus(db: Db, userId: string): TowersView | null {
+  const row = openSession(db, userId, 'towers');
+  if (!row) return null;
+  return towersView(db, userId, row, JSON.parse(row.state_json) as TowersState);
 }
 
 // ----------------------------------------------------------------- videopoker --

@@ -8,11 +8,14 @@
  */
 
 import type {
-  blackjack, BlackjackView, CrashView, holdem, HoldemView, MinesView, VideoPokerView,
+  blackjack, BlackjackView, CrashView, hilo, HiLoView, holdem, HoldemView, MinesView,
+  towers, TowersView, VideoPokerView,
 } from '@websino/engine';
 
 export type BlackjackAction = blackjack.Action;
-export type { BlackjackView, CrashView, HoldemView, MinesView, VideoPokerView };
+export type { BlackjackView, CrashView, HiLoView, HoldemView, MinesView, TowersView, VideoPokerView };
+export type HiLoGuess = hilo.HiLoGuess;
+export type TowersDifficulty = towers.Difficulty;
 export type HoldemAction = holdem.HoldemAction;
 
 export type PlayMode = 'house' | 'practice';
@@ -82,6 +85,22 @@ export interface MinesApi {
   cashOut(): Promise<MinesView>;
 }
 
+export interface HiLoApi {
+  status(): Promise<HiLoView | null>;
+  start(bet: number): Promise<HiLoView>;
+  /** One request per guess: the cards ahead are never sent while the run is live. */
+  guess(choice: HiLoGuess): Promise<HiLoView>;
+  cashOut(): Promise<HiLoView>;
+}
+
+export interface TowersApi {
+  status(): Promise<TowersView | null>;
+  start(bet: number, difficulty: TowersDifficulty): Promise<TowersView>;
+  /** One request per row, for the same reason mines takes one per tile. */
+  climb(tile: number): Promise<TowersView>;
+  cashOut(): Promise<TowersView>;
+}
+
 export interface VideoPokerApi {
   status(): Promise<VideoPokerView | null>;
   deal(coins: number, coinValue: number): Promise<VideoPokerView>;
@@ -109,6 +128,8 @@ export interface GameTransport {
   readonly blackjack: BlackjackApi;
   readonly crash: CrashApi;
   readonly mines: MinesApi;
+  readonly hilo: HiLoApi;
+  readonly towers: TowersApi;
   readonly videopoker: VideoPokerApi;
   readonly holdem: HoldemApi;
   /** Practice mode only - tops the local wallet back up. */

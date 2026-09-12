@@ -12,8 +12,9 @@
 
 import type {
   BlackjackAction, BlackjackApi, BlackjackView, CrashApi, CrashView,
-  FairnessState, GameTransport, HoldemAction, HoldemApi, HoldemView, MinesApi, MinesView,
-  PlayRequest, PlayResponse, VideoPokerApi, VideoPokerView,
+  FairnessState, GameTransport, HiLoApi, HiLoView, HoldemAction, HoldemApi, HoldemView,
+  MinesApi, MinesView, PlayRequest, PlayResponse, TowersApi, TowersView, VideoPokerApi,
+  VideoPokerView,
 } from './transport.js';
 
 export class ApiError extends Error {
@@ -104,6 +105,21 @@ export class HttpTransport implements GameTransport {
     start: (bet, mines) => call<MinesView>('/api/mines/start', 'POST', { bet, mines }),
     reveal: (position) => call<MinesView>('/api/mines/reveal', 'POST', { position }),
     cashOut: () => call<MinesView>('/api/mines/cashout', 'POST', {}),
+  };
+
+  readonly hilo: HiLoApi = {
+    status: () => call<HiLoView | null>('/api/hilo'),
+    start: (bet) => call<HiLoView>('/api/hilo/start', 'POST', { bet }),
+    guess: (choice) => call<HiLoView>('/api/hilo/guess', 'POST', { guess: choice }),
+    cashOut: () => call<HiLoView>('/api/hilo/cashout', 'POST', {}),
+  };
+
+  readonly towers: TowersApi = {
+    status: () => call<TowersView | null>('/api/towers'),
+    start: (bet, difficulty) =>
+      call<TowersView>('/api/towers/start', 'POST', { bet, difficulty }),
+    climb: (tile) => call<TowersView>('/api/towers/climb', 'POST', { tile }),
+    cashOut: () => call<TowersView>('/api/towers/cashout', 'POST', {}),
   };
 
   readonly videopoker: VideoPokerApi = {

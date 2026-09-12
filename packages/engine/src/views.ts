@@ -79,6 +79,70 @@ export interface MinesView {
   proof: { serverSeedHash: string; nonce: number };
 }
 
+/**
+ * Hi-Lo, as one player is allowed to see it.
+ *
+ * `cards` on the round is the whole run drawn up front; what ships here is only the card
+ * on the table and the ones already turned over. The future is absent, not hidden.
+ */
+export interface HiLoView {
+  state: 'playing' | 'busted' | 'cashed';
+  bet: number;
+  /**
+   * The card the run opened on.
+   *
+   * Sent explicitly because it is the only revealed card that is not in `history` -
+   * nothing was guessed to turn it over. Without it the opening card simply disappears
+   * from the screen after the first guess, and the player loses sight of what they had
+   * been guessing against.
+   */
+  opening: Card;
+  /** The card the next guess is measured against. */
+  current: Card;
+  history: Array<{ guess: 'higher' | 'lower'; card: Card; won: boolean; stepMultiplier: number }>;
+  steps: number;
+  multiplier: number;
+  /** What cashing out right now would return. */
+  payout: number;
+  /** What each guess would pay, and how likely it is - quoted before the player commits. */
+  odds: {
+    higher: { chance: number; multiplier: number };
+    lower: { chance: number; multiplier: number };
+  };
+  /** True once the streak has run as far as the game allows. */
+  capped: boolean;
+  maxSteps: number;
+  balance: number;
+  proof: { serverSeedHash: string; nonce: number };
+}
+
+/**
+ * Towers, as one player is allowed to see it.
+ *
+ * The trap map is absent while the round is live, for the same reason mines' is.
+ */
+export interface TowersView {
+  state: 'playing' | 'busted' | 'cashed';
+  bet: number;
+  difficulty: 'easy' | 'medium' | 'hard' | 'expert' | 'master';
+  tiles: number;
+  traps: number;
+  rows: number;
+  /** The tile picked on each cleared row, bottom first. */
+  picks: number[];
+  multiplier: number;
+  payout: number;
+  /** What clearing one more row would be worth, or null at the top. */
+  nextMultiplier: number | null;
+  /** Every rung's multiplier, so the ladder can be drawn before it is climbed. */
+  table: number[];
+  balance: number;
+  /** Absent while the round is live - this is the map. */
+  trapMap?: number[][];
+  hit?: { row: number; tile: number } | null;
+  proof: { serverSeedHash: string; nonce: number };
+}
+
 export interface VideoPokerView {
   phase: 'holding' | 'complete';
   cards: Card[];
