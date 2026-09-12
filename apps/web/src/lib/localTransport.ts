@@ -7,17 +7,17 @@
  * winnings" scheme is just an invitation to edit localStorage and press upload.
  */
 
-import { commit, FairStream } from '@websino/fair';
+import { commit, createCasualSource, FairStream } from '@websino/fair';
 import {
-  blackjack, crash, dice, limbo, mines, roulette, shuffleShoe, slots, videopoker,
-  type BlackjackView, type CrashView, type MinesView, type ShoeState,
-  type VideoPokerView,
+  blackjack, crash, dice, holdem, limbo, mines, roulette, shuffleShoe, slots, videopoker,
+  type BlackjackView, type CrashView, type HoldemSeatView, type HoldemView,
+  type MinesView, type ShoeState, type VideoPokerView,
 } from '@websino/engine';
 import type { RoundGame } from '@websino/engine';
 
 import type {
-  BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, MinesApi,
-  PlayRequest, PlayResponse, VideoPokerApi,
+  BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, HoldemAction,
+  HoldemApi, MinesApi, PlayRequest, PlayResponse, VideoPokerApi,
 } from './transport.js';
 
 const WALLET_KEY = 'websino.practice.wallet.v1';
@@ -55,6 +55,13 @@ interface StoredTables {
   crash: { round: crash.CrashRound; startedAt: number } | null;
   mines: { round: mines.MinesRound; nonce: number } | null;
   videopoker: { round: videopoker.VideoPokerRound; nonce: number } | null;
+  holdem: {
+    table: holdem.HoldemTable;
+    you: number;
+    buyIn: number;
+    botSeed: number;
+    nonce: number;
+  } | null;
 }
 
 const TABLES_KEY = 'websino.practice.tables.v1';
@@ -99,7 +106,7 @@ export class LocalTransport implements GameTransport {
       nonce: 0,
     });
     this.#tables = read<StoredTables>(TABLES_KEY, {
-      blackjack: null, crash: null, mines: null, videopoker: null,
+      blackjack: null, crash: null, mines: null, videopoker: null, holdem: null,
     });
     this.#persist();
   }
@@ -426,6 +433,140 @@ export class LocalTransport implements GameTransport {
       this.#tables.videopoker = null;
       this.#persist();
       return view;
+    },
+  };
+
+  #holdemView(): HoldemView {
+    const entry = this.#tables.holdem;
+    if (!entry) throw new Error('no hold em table');
+    const t = entry.table;
+    const showdown = t.result?.wentToShowdown === true;
+    const descriptions = new Map((t.result?.entries ?? []).map((e) => [e.seat, e.description]));
+
+    const seats: HoldemSeatView[] = t.players.map((p) => {
+      const reveal = p.seat === entry.you || (showdown && holdem.inHand(p));
+      return {
+        seat: p.seat,
+        name: p.name,
+        chips: p.chips,
+        isBot: p.isBot,
+        style: p.profile?.name ?? null,
+        ...(reveal && p.hole.length > 0 ? { hole: [...p.hole] } : {}),
+        bet: p.bet,
+        committed: p.committed,
+        folded: p.folded,
+        allIn: p.allIn,
+        sittingOut: p.sittingOut,
+        lastAction: p.lastAction,
+        wonLast: p.wonLast,
+        isButton: p.seat === t.button,
+        isTurn: t.toAct === p.seat,
+        ...(showdown ? { handDescription: descriptions.get(p.seat) ?? null } : {}),
+      };
+    });
+
+    const you = t.players[entry.you] as holdem.HoldemPlayer;
+    const yourTurn = t.toAct === entry.you && !holdem.isHandOver(t);
+
+    return {
+      street: t.street,
+      board: [...t.board],
+      pot: holdem.potOf(t),
+      currentBet: t.currentBet,
+      seats,
+      you: entry.you,
+      toAct: t.toAct,
+      yourTurn,
+      actions: yourTurn ? holdem.legalActions(t, you) : [],
+      toCall: holdem.toCall(t, you),
+      minRaiseTo: holdem.minRaiseTo(t, you),
+      maxRaiseTo: holdem.maxRaiseTo(t, you),
+      handInProgress: t.handInProgress,
+      handNumber: t.handNumber,
+      log: [...t.log],
+      result: t.result
+        ? { wentToShowdown: t.result.wentToShowdown, winners: t.result.winners, pots: t.result.pots }
+        : null,
+      balance: this.#balance,
+      proof: this.#proofFor(entry.nonce),
+    };
+  }
+
+  /** Bots act until it is the human's turn again, or the hand ends. */
+  #runBots(): void {
+    const entry = this.#tables.holdem;
+    if (!entry) return;
+    const random = createCasualSource(entry.botSeed);
+    entry.botSeed = (entry.botSeed * 1_103_515_245 + 12_345) >>> 0;
+
+    for (let guard = 0; guard < 200; guard += 1) {
+      const t = entry.table;
+      if (holdem.isHandOver(t) || t.toAct === null || t.toAct === entry.you) return;
+      holdem.playBotTurn(t, random);
+    }
+    throw new Error('hold em table failed to settle');
+  }
+
+  readonly holdem: HoldemApi = {
+    status: async (): Promise<HoldemView | null> =>
+      this.#tables.holdem ? this.#holdemView() : null,
+
+    sit: async (buyIn: number): Promise<HoldemView> => {
+      if (this.#tables.holdem) throw new Error('you are already sitting at a table');
+      if (!Number.isInteger(buyIn) || buyIn < 1) throw new Error('invalid buy-in');
+      if (buyIn > this.#balance) throw new Error('not enough practice chips');
+
+      const { stream, nonce } = this.#takeStream();
+      const botSeed = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
+      const players = holdem.makeTable(createCasualSource(botSeed), buyIn, 3, 2000);
+      this.#balance -= buyIn;
+      this.#tables.holdem = {
+        table: holdem.createTable(players),
+        you: 0,
+        buyIn,
+        botSeed,
+        nonce,
+      };
+      holdem.dealHand(this.#tables.holdem.table, stream);
+      this.#runBots();
+      this.#persist();
+      return this.#holdemView();
+    },
+
+    deal: async (): Promise<HoldemView> => {
+      const entry = this.#tables.holdem;
+      if (!entry) throw new Error('no hold em table');
+      if (entry.table.handInProgress) throw new Error('finish the hand first');
+      if ((entry.table.players[entry.you] as holdem.HoldemPlayer).chips <= 0) {
+        throw new Error('you are out of chips at this table');
+      }
+      const { stream, nonce } = this.#takeStream();
+      entry.nonce = nonce;
+      holdem.dealHand(entry.table, stream);
+      this.#runBots();
+      this.#persist();
+      return this.#holdemView();
+    },
+
+    act: async (action: HoldemAction, amount: number): Promise<HoldemView> => {
+      const entry = this.#tables.holdem;
+      if (!entry) throw new Error('no hold em table');
+      if (entry.table.toAct !== entry.you) throw new Error('it is not your turn');
+      holdem.act(entry.table, action, amount);
+      this.#runBots();
+      this.#persist();
+      return this.#holdemView();
+    },
+
+    leave: async (): Promise<{ balance: number; cashedOut: number }> => {
+      const entry = this.#tables.holdem;
+      if (!entry) throw new Error('no hold em table');
+      if (entry.table.handInProgress) throw new Error('finish the hand before you stand up');
+      const stack = (entry.table.players[entry.you] as holdem.HoldemPlayer).chips;
+      this.#balance += stack;
+      this.#tables.holdem = null;
+      this.#persist();
+      return { balance: this.#balance, cashedOut: stack };
     },
   };
 

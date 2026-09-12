@@ -13,7 +13,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { z } from 'zod';
 
-import { blackjack, InvalidBetError, mines, videopoker } from '@websino/engine';
+import { blackjack, holdem, InvalidBetError, mines, videopoker } from '@websino/engine';
 
 import { AuthError, SESSION_COOKIE, createSession, destroySession, login, register, resolveSession } from './auth/index.js';
 import { openDatabase, type Db } from './db/index.js';
@@ -23,8 +23,9 @@ import { GAMES, playRound } from './rounds.js';
 import {
   actBlackjack, blackjackStatus, cashOutCrash, cashOutMines, crashStatus,
   dealBlackjack, dealVideoPoker, drawVideoPoker, holdVideoPoker, insureBlackjack,
-  minesStatus, NoSuchSessionError, revealMinesTile, SessionConflictError,
-  startCrashRound, startMinesRound, videoPokerStatus,
+  actHoldem, dealHoldem, holdemStatus, leaveHoldem, minesStatus, NoSuchSessionError,
+  revealMinesTile, SessionConflictError, sitHoldem, startCrashRound, startMinesRound,
+  videoPokerStatus,
 } from './sessions.js';
 
 const credentials = z.object({
@@ -72,6 +73,7 @@ export async function buildServer(db: Db = openDatabase()) {
     if (
       error instanceof blackjack.IllegalActionError ||
       error instanceof mines.MinesError ||
+      error instanceof holdem.HoldemError ||
       error instanceof videopoker.VideoPokerError
     ) {
       return reply.code(400).send({ error: message });
@@ -242,6 +244,33 @@ export async function buildServer(db: Db = openDatabase()) {
   });
 
   app.get('/api/videopoker', async (request) => videoPokerStatus(db, requireUser(request).id));
+
+  // -------------------------------------------------------------- hold'em --
+  // One human against bots, so this is still request/response: the bots act inside the
+  // same request that the human's action arrives on. Shared tables with several humans
+  // are what need a socket, and that is the next piece.
+  app.post('/api/holdem/sit', async (request) => {
+    const user = requireUser(request);
+    const { buyIn } = z.object({ buyIn: z.number().int().positive() }).parse(request.body);
+    return sitHoldem(db, user.id, buyIn);
+  });
+
+  app.post('/api/holdem/deal', async (request) => dealHoldem(db, requireUser(request).id));
+
+  app.post('/api/holdem/act', async (request) => {
+    const user = requireUser(request);
+    const body = z
+      .object({
+        action: z.enum(['fold', 'check', 'call', 'bet', 'raise']),
+        amount: z.number().int().min(0).default(0),
+      })
+      .parse(request.body);
+    return actHoldem(db, user.id, body.action, body.amount);
+  });
+
+  app.post('/api/holdem/leave', async (request) => leaveHoldem(db, requireUser(request).id));
+
+  app.get('/api/holdem', async (request) => holdemStatus(db, requireUser(request).id));
 
   return app;
 }

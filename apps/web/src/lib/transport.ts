@@ -8,11 +8,12 @@
  */
 
 import type {
-  blackjack, BlackjackView, CrashView, MinesView, VideoPokerView,
+  blackjack, BlackjackView, CrashView, holdem, HoldemView, MinesView, VideoPokerView,
 } from '@websino/engine';
 
 export type BlackjackAction = blackjack.Action;
-export type { BlackjackView, CrashView, MinesView, VideoPokerView };
+export type { BlackjackView, CrashView, HoldemView, MinesView, VideoPokerView };
+export type HoldemAction = holdem.HoldemAction;
 
 export type PlayMode = 'house' | 'practice';
 
@@ -88,6 +89,16 @@ export interface VideoPokerApi {
   draw(held: boolean[]): Promise<VideoPokerView>;
 }
 
+export interface HoldemApi {
+  status(): Promise<HoldemView | null>;
+  /** Buy in and take a seat; the first hand is dealt immediately. */
+  sit(buyIn: number): Promise<HoldemView>;
+  deal(): Promise<HoldemView>;
+  act(action: HoldemAction, amount: number): Promise<HoldemView>;
+  /** Stand up and take the stack home. Only legal between hands. */
+  leave(): Promise<{ balance: number; cashedOut: number }>;
+}
+
 export interface GameTransport {
   readonly mode: PlayMode;
   getBalance(): Promise<number>;
@@ -99,6 +110,7 @@ export interface GameTransport {
   readonly crash: CrashApi;
   readonly mines: MinesApi;
   readonly videopoker: VideoPokerApi;
+  readonly holdem: HoldemApi;
   /** Practice mode only - tops the local wallet back up. */
   topUp?(): Promise<number>;
 }

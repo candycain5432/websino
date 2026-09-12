@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 419 tests
+pnpm test         # 489 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -38,18 +38,47 @@ Node 22+ and pnpm 10+.
 
 | | |
 |---|---|
-| **Games** | Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo |
+| **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 419, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 489, covering payout maths, chip conservation and seed secrecy |
 
-Hold'em tables, Plinko, Hi-Lo, Towers and Wheel of Fortune are next — see
+Shared multiplayer tables, Plinko, Hi-Lo, Towers and Wheel of Fortune are next — see
 [Roadmap](#roadmap).
 
 ---
 
 ## The games
+
+### Texas Hold'em
+
+![Texas Hold'em](docs/screenshots/holdem.png)
+
+A full no-limit cash game against three Monte Carlo bots: blinds, four betting streets,
+short-stack all-ins and properly layered side pots. Each bot gets a name and a
+personality — a Rock, a Shark, a Maniac, a Calling Station, a Grinder — and estimates its
+equity by simulating the rest of the hand a few hundred times, then mixes that with pot
+odds and its own temperament.
+
+**Chip conservation is the headline invariant, and it is asserted after every single
+action.** pysino's hold'em minted 4,918 chips from a refund of a buy-in that had never
+been debited, so here the total across every seat plus the pot is checked before a hand,
+after each action, and after settlement, across sixty bot-vs-bot hands. Settlement clears
+commitments as it pays, because otherwise the same chips would sit in two columns at once
+and the total would silently double.
+
+Your buy-in is debited when you sit and your stack credited when you stand up — the two
+halves of one session, in one file, so a refund without a matching debit is not reachable.
+
+Side pots walk *contribution levels* rather than players, which is the only way short
+stacks and folds compose correctly: a folded player's chips stay in the pot they paid
+into, they simply cannot win it. Consecutive layers contested by the same seats merge, or
+a player folding their blind would look like it created a side pot.
+
+Bots take a `CasualSource`. Handing one the fair stream is a **compile error**, not a code
+review catch — pysino's equity estimator drew from the deal's own generator, so a bot
+thinking perturbed the cards still to come.
 
 ### Roulette
 
@@ -318,7 +347,8 @@ The interesting tests are the invariants, not the line coverage:
       server, and sign-in
 - [x] Mines, video poker, solo roulette
 - [ ] Plinko, Hi-Lo, Towers, Wheel of Fortune, slots variety pack
-- [ ] Multiplayer: hold'em tables with bots, shared blackjack and roulette
+- [x] Hold'em against bots
+- [ ] Shared tables: several humans at one hold'em table, shared blackjack and roulette
 - [ ] Leaderboards, profiles, achievements, XP and levels
 - [ ] PWA install, sound, animation pass
 

@@ -85,6 +85,7 @@ const ledgerCount = async () => {
 for (const [game, action] of [
   ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'], ['Dice', 'Roll'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
+  ["Hold'em", 'Sit down for 500'],
 ]) {
   await page.getByRole('button', { name: new RegExp(game) }).first().click();
   await page.waitForTimeout(300);
@@ -98,8 +99,22 @@ for (const [game, action] of [
     const tile = page.getByRole('button', { name: 'tile 1', exact: true });
     if (await tile.count()) { await tile.click(); await page.waitForTimeout(500); }
   }
+  // Hold'em: play the hand out, then stand up - the cash-out is the half of the
+  // buy-in/refund pair that pysino got wrong, so it has to be exercised here.
+  if (game === "Hold'em") {
+    for (let i = 0; i < 12; i += 1) {
+      const check = page.getByRole('button', { name: 'Check', exact: true });
+      const call = page.getByRole('button', { name: /^Call/ });
+      const fold = page.getByRole('button', { name: 'Fold', exact: true });
+      if (await check.count()) await check.click();
+      else if (await call.count()) await call.first().click();
+      else if (await fold.count()) await fold.click();
+      else break;
+      await page.waitForTimeout(400);
+    }
+  }
   // Settle anything still open so the next game starts clean.
-  for (const name of ['Stand', 'Cash out ', 'No thanks', 'Draw']) {
+  for (const name of ['Stand up with', 'Stand', 'Cash out ', 'No thanks', 'Draw']) {
     const button = page.getByRole('button', { name: new RegExp(name) });
     if (await button.count()) { await button.first().click(); await page.waitForTimeout(600); }
   }

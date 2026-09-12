@@ -12,8 +12,8 @@
 
 import type {
   BlackjackAction, BlackjackApi, BlackjackView, CrashApi, CrashView,
-  FairnessState, GameTransport, MinesApi, MinesView, PlayRequest, PlayResponse,
-  VideoPokerApi, VideoPokerView,
+  FairnessState, GameTransport, HoldemAction, HoldemApi, HoldemView, MinesApi, MinesView,
+  PlayRequest, PlayResponse, VideoPokerApi, VideoPokerView,
 } from './transport.js';
 
 export class ApiError extends Error {
@@ -111,5 +111,15 @@ export class HttpTransport implements GameTransport {
     deal: (coins, coinValue) =>
       call<VideoPokerView>('/api/videopoker/deal', 'POST', { coins, coinValue }),
     draw: (held) => call<VideoPokerView>('/api/videopoker/draw', 'POST', { held }),
+  };
+
+  readonly holdem: HoldemApi = {
+    status: () => call<HoldemView | null>('/api/holdem'),
+    sit: (buyIn) => call<HoldemView>('/api/holdem/sit', 'POST', { buyIn }),
+    deal: () => call<HoldemView>('/api/holdem/deal', 'POST', {}),
+    act: (action: HoldemAction, amount: number) =>
+      call<HoldemView>('/api/holdem/act', 'POST', { action, amount }),
+    leave: () =>
+      call<{ balance: number; cashedOut: number }>('/api/holdem/leave', 'POST', {}),
   };
 }

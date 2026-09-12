@@ -93,3 +93,51 @@ export interface VideoPokerView {
   balance: number;
   proof: { serverSeedHash: string; nonce: number };
 }
+
+export interface HoldemSeatView {
+  seat: number;
+  name: string;
+  chips: number;
+  isBot: boolean;
+  /** The bot's playing style, so a seat shows both who and how. */
+  style: string | null;
+  /** Absent while the hand is live for anyone but you - these are the hole cards. */
+  hole?: Card[];
+  bet: number;
+  committed: number;
+  folded: boolean;
+  allIn: boolean;
+  sittingOut: boolean;
+  lastAction: string;
+  wonLast: number;
+  isButton: boolean;
+  isTurn: boolean;
+  /** Shown only at showdown. */
+  handDescription?: string | null;
+}
+
+export interface HoldemView {
+  street: string;
+  board: Card[];
+  pot: number;
+  currentBet: number;
+  seats: HoldemSeatView[];
+  /** The seat you are sitting in. */
+  you: number;
+  toAct: number | null;
+  yourTurn: boolean;
+  actions: string[];
+  toCall: number;
+  minRaiseTo: number;
+  maxRaiseTo: number;
+  handInProgress: boolean;
+  handNumber: number;
+  log: string[];
+  result: {
+    wentToShowdown: boolean;
+    winners: number[];
+    pots: Array<{ amount: number; eligible: number[]; isSide: boolean }>;
+  } | null;
+  balance: number;
+  proof: { serverSeedHash: string; nonce: number };
+}
