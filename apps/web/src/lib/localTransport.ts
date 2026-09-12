@@ -9,7 +9,8 @@
 
 import { commit, createCasualSource, FairStream } from '@websino/fair';
 import {
-  blackjack, crash, dice, holdem, limbo, mines, roulette, shuffleShoe, slots, videopoker,
+  blackjack, crash, dice, holdem, limbo, mines, plinko, roulette, shuffleShoe, slots,
+  videopoker, wheel,
   type BlackjackView, type CrashView, type HoldemSeatView, type HoldemView,
   type MinesView, type ShoeState, type VideoPokerView,
 } from '@websino/engine';
@@ -29,6 +30,8 @@ const GAMES: Record<string, RoundGame<never, unknown>> = {
   limbo: limbo as unknown as RoundGame<never, unknown>,
   slots: slots as unknown as RoundGame<never, unknown>,
   roulette: roulette as unknown as RoundGame<never, unknown>,
+  plinko: plinko as unknown as RoundGame<never, unknown>,
+  wheel: wheel as unknown as RoundGame<never, unknown>,
 };
 
 interface StoredFair {

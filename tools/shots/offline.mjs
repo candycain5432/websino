@@ -54,6 +54,7 @@ if (out) await page.screenshot({ path: `${out}/offline.png` });
 for (const [game, action] of [
   ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
+  ['Plinko', /^Drop for/], ['Wheel of Fortune', /^Spin for/],
   ["Hold'em", 'Sit down for 500'],
 ]) {
   await page.getByRole('button', { name: /lobby/i }).click();
@@ -61,8 +62,11 @@ for (const [game, action] of [
   await page.getByRole('button', { name: new RegExp(game) }).first().click();
   await page.waitForTimeout(250);
   const chipsBefore = (await page.locator('.shell__chips').textContent())?.trim();
-  await page.getByRole('button', { name: action, exact: true }).click();
-  await page.waitForTimeout(900);
+  await page.getByRole('button', {
+    name: action,
+    ...(typeof action === 'string' ? { exact: true } : {}),
+  }).click();
+  await page.waitForTimeout(game === 'Wheel of Fortune' ? 3200 : 900);
   const chipsAfter = (await page.locator('.shell__chips').textContent())?.trim();
   const moved = chipsBefore !== chipsAfter;
   console.log(`${game.padEnd(32)} ${moved ? `played (${chipsBefore} -> ${chipsAfter})` : 'DID NOT PLAY'}`);

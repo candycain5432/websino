@@ -1,0 +1,130 @@
+/**
+ * Plinko.
+ *
+ * The board is a stack of flex rows rather than an absolutely positioned triangle, so
+ * it scales to any width without arithmetic. The ball is the one absolutely positioned
+ * thing, because it has to sit *between* pegs rather than in the layout.
+ */
+
+.plinko {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  /* Grid and flex items default to `min-width: auto`, so without this the bucket row
+     refuses to shrink below its content and pushes the whole page sideways. */
+  min-inline-size: 0;
+  /* The shell centres its board content, so this has to claim a width rather than be
+     sized by whatever the peg triangle happened to come out as. */
+  inline-size: min(100%, 34rem);
+  margin-inline: auto;
+}
+
+/*
+ * Every peg is positioned by percentage from the same formula the ball uses, so the
+ * triangle, the ball and the buckets cannot drift out of alignment. Laying the rows out
+ * with flex gaps instead left the triangle a third the width of the buckets beneath it.
+ */
+.plinko__pegs {
+  position: relative;
+  aspect-ratio: 5 / 4;
+  max-block-size: 46vh;
+}
+
+.plinko__peg {
+  position: absolute;
+  inline-size: clamp(3px, 0.7vw, 7px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+  translate: -50% -50%;
+  transition: background var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.plinko__peg.is-live {
+  background: var(--gold-bright);
+  box-shadow: 0 0 6px var(--gold);
+}
+
+.plinko__ball {
+  position: absolute;
+  inline-size: clamp(9px, 1.8vw, 16px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold) 60%, var(--gold-dim));
+  box-shadow: var(--glow-gold);
+  translate: -50% -50%;
+  /* Matches ROW_MS in PlinkoGame.tsx - the ball arrives exactly as the next row lights. */
+  transition: inset-block-start 90ms linear, inset-inline-start 90ms linear;
+}
+
+/* ------------------------------------------------------------------- buckets -- */
+
+.plinko__buckets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  min-inline-size: 0;
+}
+
+.bucket {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: clamp(0.45rem, 1.5vw, var(--text-xs));
+  font-weight: 600;
+  color: var(--ink);
+  /* --heat runs 0 at the centre to 1 at the edges; the tint follows the payout. */
+  background: color-mix(in srgb, var(--warn) calc(var(--heat, 0) * 100%), var(--silver));
+  transition: transform var(--dur), box-shadow var(--dur);
+}
+
+.bucket.is-losing { background: color-mix(in srgb, var(--lose) 35%, var(--silver)); }
+
+.bucket.is-hit {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 2px var(--gold), var(--glow-gold);
+}
+
+.bucket span { display: block; overflow: hidden; text-overflow: ellipsis; }
+
+/* ------------------------------------------------------------------ controls -- */
+
+.plinko__controls { display: grid; gap: var(--space-4); }
+
+.plinko__set { border: 0; margin: 0; padding: 0; }
+
+.plinko__set legend {
+  padding: 0 0 var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.plinko__choices { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.plinko__drop { inline-size: 100%; }
+
+.plinko__error { margin: 0; color: var(--lose); font-size: var(--text-sm); }
+
+.plinko__stats {
+  display: flex;
+  gap: var(--space-5);
+  margin: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--panel-edge);
+}
+
+.plinko__stats dt { color: var(--text-dim); font-size: var(--text-xs); }
+.plinko__stats dd { margin: 2px 0 0; color: var(--gold); font-size: var(--text-lg); }
+
+.plinko__note { margin: 0; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6; }
+
+@media (width <= 30rem) {
+  .plinko__pegs { max-block-size: 34vh; }
+}

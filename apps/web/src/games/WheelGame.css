@@ -1,0 +1,102 @@
+/**
+ * Wheel of Fortune.
+ *
+ * The wheel is a single element painted with a `conic-gradient`, not N segment nodes.
+ * One declaration, one repaint, and changing the segment count is a string change rather
+ * than tearing down and rebuilding fifty elements.
+ */
+
+.wof {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+}
+
+.wof__wheel {
+  position: relative;
+  inline-size: min(24rem, 70vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 3px solid var(--gold-dim);
+  box-shadow: var(--shadow-lg), inset 0 0 40px rgb(0 0 0 / 45%);
+  transition-property: transform;
+  /* Heavy at the start, drifting at the end - a wheel with mass rather than a spinner. */
+  transition-timing-function: cubic-bezier(0.16, 0.86, 0.22, 1);
+}
+
+/* The marker the wheel comes to rest against, at the top. */
+.wof__pointer {
+  position: absolute;
+  inset-block-start: calc(var(--space-5) - 10px);
+  inline-size: 0;
+  block-size: 0;
+  border-inline: 11px solid transparent;
+  border-block-start: 20px solid var(--gold-bright);
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 60%));
+  z-index: 1;
+}
+
+/* Layered over the wheel rather than inside it, so the reading never turns. */
+.wof__hub {
+  position: absolute;
+  z-index: 1;
+  inline-size: min(10rem, 29vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--panel-light), var(--panel) 70%);
+  border: 2px solid var(--panel-edge);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.wof__result { font-size: var(--text-xl); font-weight: 700; color: var(--text-dim); }
+.wof__result.is-win { color: var(--gold-bright); text-shadow: 0 0 18px var(--gold); }
+
+.wof__caption {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ------------------------------------------------------------------ controls -- */
+
+.wof__controls { display: grid; gap: var(--space-4); }
+
+.wof__set { border: 0; margin: 0; padding: 0; }
+
+.wof__set legend {
+  padding: 0 0 var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.wof__choices { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+.wof__spin { inline-size: 100%; }
+
+.wof__error { margin: 0; color: var(--lose); font-size: var(--text-sm); }
+
+.wof__stats {
+  display: flex;
+  gap: var(--space-5);
+  margin: 0;
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--panel-edge);
+}
+
+.wof__stats dt { color: var(--text-dim); font-size: var(--text-xs); }
+.wof__stats dd { margin: 2px 0 0; color: var(--gold); font-size: var(--text-lg); }
+
+.wof__note { margin: 0; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The outcome is the server's; the spin is decoration, so it can simply not happen. */
+  .wof__wheel { transition-duration: 1ms !important; }
+}

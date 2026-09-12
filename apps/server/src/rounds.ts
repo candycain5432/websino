@@ -9,7 +9,9 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { assertValidBet, dice, limbo, roulette, slots, type RoundGame } from '@websino/engine';
+import {
+  assertValidBet, dice, limbo, plinko, roulette, slots, wheel, type RoundGame,
+} from '@websino/engine';
 
 import type { Db } from './db/index.js';
 import { applyLedger, getBalance } from './db/ledger.js';
@@ -20,6 +22,8 @@ export const GAMES: Record<string, RoundGame<never, unknown>> = {
   limbo: limbo as unknown as RoundGame<never, unknown>,
   slots: slots as unknown as RoundGame<never, unknown>,
   roulette: roulette as unknown as RoundGame<never, unknown>,
+  plinko: plinko as unknown as RoundGame<never, unknown>,
+  wheel: wheel as unknown as RoundGame<never, unknown>,
 };
 
 export interface PlayResult {
