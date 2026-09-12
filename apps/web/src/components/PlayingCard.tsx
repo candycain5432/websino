@@ -16,7 +16,8 @@ export function PlayingCard({
   size = 'md',
   highlighted = false,
 }: {
-  card?: Card;
+  /** Explicitly `undefined` is meaningful here: it is the face-down case. */
+  card?: Card | undefined;
   faceUp?: boolean;
   size?: 'sm' | 'md' | 'lg';
   highlighted?: boolean;

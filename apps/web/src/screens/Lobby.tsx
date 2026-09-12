@@ -15,9 +15,9 @@ export interface GameCard {
 export const GAMES: GameCard[] = [
   { id: 'dice',       name: 'Dice',        tagline: 'Roll over or under your number', house: 'Edge 1%',    accent: 'var(--info)',   available: true },
   { id: 'limbo',      name: 'Limbo',       tagline: 'Pick a target, clear it, cash',  house: 'Edge 1%',    accent: 'var(--purple)', available: true },
-  { id: 'blackjack',  name: 'Blackjack',   tagline: 'Six decks, dealer stands soft 17', house: 'Edge 0.5%', accent: 'var(--win)',    available: false },
-  { id: 'slots',      name: 'Golden Reels',tagline: '20 lines, wilds, free spins',    house: 'RTP 95%',    accent: 'var(--gold)',   available: false },
-  { id: 'crash',      name: 'Crash',       tagline: 'Cash out before the curve dies', house: 'Edge 1%',    accent: 'var(--warn)',   available: false },
+  { id: 'blackjack',  name: 'Blackjack',   tagline: 'Six decks, dealer stands soft 17', house: 'Edge 0.5%', accent: 'var(--win)',    available: true },
+  { id: 'slots',      name: 'Golden Reels',tagline: '20 lines, wilds, free spins',    house: 'RTP 94.7%',  accent: 'var(--gold)',   available: true },
+  { id: 'crash',      name: 'Crash',       tagline: 'Cash out before the curve dies', house: 'Edge 1%',    accent: 'var(--warn)',   available: true },
   { id: 'holdem',     name: "Texas Hold'em", tagline: 'No-limit tables with real players', house: 'Multiplayer', accent: 'var(--lose)', available: false },
 ];
 
@@ -26,11 +26,13 @@ export function Lobby({
   balance,
   onOpen,
   onTopUp,
+  onSignOut,
 }: {
   transport: GameTransport;
   balance: number;
   onOpen: (id: string) => void;
   onTopUp: () => void;
+  onSignOut?: (() => void) | undefined;
 }) {
   return (
     <div className="lobby">
@@ -49,9 +51,16 @@ export function Lobby({
         <div className="lobby__wallet">
           {transport.mode === 'practice' && <span className="lobby__mode">Practice</span>}
           <span className="lobby__balance numeric">{formatChips(balance)}</span>
-          <button className="btn btn--ghost lobby__topup" onClick={onTopUp}>
-            Top up
-          </button>
+          {transport.topUp && (
+            <button className="btn btn--ghost lobby__topup" onClick={onTopUp}>
+              Top up
+            </button>
+          )}
+          {onSignOut && (
+            <button className="btn btn--ghost lobby__topup" onClick={onSignOut}>
+              {transport.mode === 'practice' ? 'Sign in' : 'Sign out'}
+            </button>
+          )}
         </div>
       </header>
 

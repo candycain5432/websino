@@ -29,7 +29,9 @@ export type SlotSymbol = (typeof SYMBOLS)[number];
 
 export const SYMBOL_GLYPHS: Record<SlotSymbol, string> = {
   [CHERRY]: '❀',
-  [LEMON]: '◆',
+  // pysino used a diamond here too, so lemon and diamond differed only by colour -
+  // unreadable at a glance and worse than unreadable if you cannot see the colour.
+  [LEMON]: '◉',
   [BELL]: '♛',
   [HORSESHOE]: '∩',
   [DIAMOND]: '♦',

@@ -10,6 +10,9 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 // multi-file bundle simply will not run when opened from disk.
 export default defineConfig(({ mode }) => ({
   plugins: [react(), ...(mode === 'offline' ? [viteSingleFile()] : [])],
+  // The offline file has no server to talk to, so it goes straight to practice mode
+  // rather than showing a sign-in form that could never succeed.
+  define: { 'import.meta.env.VITE_OFFLINE': JSON.stringify(mode === 'offline' ? '1' : '0') },
   build: {
     outDir: mode === 'offline' ? 'dist-offline' : 'dist',
     target: 'es2022',

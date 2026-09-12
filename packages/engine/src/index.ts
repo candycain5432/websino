@@ -3,6 +3,7 @@ export * from './handEval.js';
 export * from './shoe.js';
 export * from './economy/chips.js';
 export * from './types.js';
+export * from './views.js';
 export { dice, type DiceConfig, type DiceDetail, type DiceDirection, multiplierFor, winChanceOf } from './games/dice/index.js';
 export { limbo, type LimboConfig, type LimboDetail, drawMultiplier, MULTIPLIER_SCALE } from './games/limbo/index.js';
 export { slots, type SlotsDetail, type Spin, type LineWin } from './games/slots/index.js';

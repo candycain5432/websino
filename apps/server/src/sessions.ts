@@ -20,7 +20,8 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  assertValidBet, blackjack, crash, shuffleShoe, type Card, type ShoeState,
+  assertValidBet, blackjack, crash, shuffleShoe,
+  type BlackjackView, type CrashView, type ShoeState,
 } from '@websino/engine';
 
 import type { Db } from './db/index.js';
@@ -120,21 +121,6 @@ function recordRound(
 interface CrashState {
   round: crash.CrashRound;
   startedAt: number;
-}
-
-export interface CrashView {
-  state: crash.CrashState;
-  bet: number;
-  autoCashOut: number | null;
-  /** Server time the round began, so the client can draw the same curve. */
-  startedAt: number;
-  tickMs: number;
-  balance: number;
-  /** Present only once the round is over - this is the secret. */
-  crashPoint?: number;
-  cashedMultiplier?: number | null;
-  payout?: number;
-  proof?: { serverSeedHash: string; nonce: number };
 }
 
 /**
@@ -248,37 +234,6 @@ export function crashStatus(db: Db, userId: string): CrashView | null {
 interface BlackjackState {
   shoe: ShoeState;
   round: blackjack.BlackjackRound | null;
-}
-
-export interface BlackjackHandView {
-  cards: Card[];
-  bet: number;
-  doubled: boolean;
-  fromSplit: boolean;
-  label: string;
-  total: number;
-  outcome: blackjack.Outcome | null;
-  payout: number;
-}
-
-export interface BlackjackView {
-  phase: blackjack.Phase;
-  hands: BlackjackHandView[];
-  /** The hole card is *absent* while face down, not merely flagged. */
-  dealer: Card[];
-  dealerTotal: number | null;
-  holeHidden: boolean;
-  activeIndex: number;
-  actions: blackjack.Action[];
-  insuranceOffered: boolean;
-  insuranceCost: number;
-  insuranceBet: number;
-  insurancePayout: number;
-  staked: number;
-  returned: number;
-  balance: number;
-  cardsRemaining: number;
-  proof: { serverSeedHash: string; nonce: number };
 }
 
 function blackjackView(db: Db, userId: string, row: SessionRow, state: BlackjackState): BlackjackView {

@@ -1,0 +1,62 @@
+/**
+ * The shapes stateful games put on the wire.
+ *
+ * These live in the engine rather than in the server so that the client imports the
+ * *same* declarations the server satisfies. Duplicating them on both sides would compile
+ * fine right up until a field was renamed on one side only, and the failure would land in
+ * a running game rather than in `tsc`.
+ *
+ * Every one of these is a **redacted** view. A field that is absent is absent because the
+ * player has not earned it yet - the hole card while it is face down, the crash point
+ * while the curve is still climbing. Nothing here is merely hidden from the UI.
+ */
+
+import type { Card } from './cards.js';
+import type { Action, Outcome, Phase } from './games/blackjack/index.js';
+import type { CrashState } from './games/crash/index.js';
+
+export interface BlackjackHandView {
+  cards: Card[];
+  bet: number;
+  doubled: boolean;
+  fromSplit: boolean;
+  label: string;
+  total: number;
+  outcome: Outcome | null;
+  payout: number;
+}
+
+export interface BlackjackView {
+  phase: Phase;
+  hands: BlackjackHandView[];
+  /** One card while the hole card is down; both once it is turned. */
+  dealer: Card[];
+  /** Null while the hole card is down - the total would give it away. */
+  dealerTotal: number | null;
+  holeHidden: boolean;
+  activeIndex: number;
+  actions: Action[];
+  insuranceOffered: boolean;
+  insuranceCost: number;
+  insuranceBet: number;
+  insurancePayout: number;
+  staked: number;
+  returned: number;
+  balance: number;
+  cardsRemaining: number;
+  proof: { serverSeedHash: string; nonce: number };
+}
+
+export interface CrashView {
+  state: CrashState;
+  bet: number;
+  autoCashOut: number | null;
+  /** Server time the round began, so the client can draw the same curve. */
+  startedAt: number;
+  tickMs: number;
+  balance: number;
+  /** Present only once the round is over - this is the secret. */
+  crashPoint?: number;
+  cashedMultiplier?: number | null;
+  payout?: number;
+}
