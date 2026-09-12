@@ -1,12 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
 import { FairStream } from '@websino/fair';
-import { evaluateGrid, evaluateLine, slots, spinGrid } from '../src/games/slots/index.js';
 import {
-  buildStrip, CHERRY, CROWN, FREE_SPIN_AWARD, FREE_SPIN_MULTIPLIER, LEMON, LINE_COUNT,
-  PAYLINES, PAYTABLE, REEL_STRIPS, REEL_WEIGHTS, REELS, ROWS, SCATTER, SCATTER_PAYS,
-  SEVEN, SYMBOL_GLYPHS, SYMBOL_NAMES, SYMBOLS, WILD,
-} from '../src/games/slots/reels.js';
+  buildStrip, evaluateGrid, evaluateLine, exactReturn, lineCountOf, machineById,
+  slots, spinGrid, stripsOf, GOLDEN_REELS, MACHINES, REELS, ROWS, SCATTER, WILD,
+} from '../src/games/slots/index.js';
+
+/**
+ * The classic cabinet, under test throughout unless a case says otherwise.
+ *
+ * Everything that used to be a module-level constant is now a property of a machine,
+ * which is the whole point of the variety pack - but the classic's numbers are
+ * unchanged, and the pinned return below proves it.
+ */
+const M = GOLDEN_REELS;
+const REEL_STRIPS = stripsOf(M);
+const REEL_WEIGHTS = M.reelWeights;
+const PAYTABLE = M.paytable;
+const PAYLINES = M.paylines;
+const LINE_COUNT = lineCountOf(M);
+const SYMBOLS = M.symbols;
+const SYMBOL_GLYPHS = M.glyphs;
+const SYMBOL_NAMES = M.names;
+const SCATTER_PAYS = M.scatterPays;
+const FREE_SPIN_AWARD = M.freeSpinAward;
+const FREE_SPIN_MULTIPLIER = M.freeSpinMultiplier;
+const CHERRY = 'cherry';
+const LEMON = 'lemon';
+const CROWN = 'crown';
+const SEVEN = 'seven';
 
 const stream = (nonce: number): FairStream =>
   new FairStream({ serverSeed: 'a'.repeat(64), clientSeed: 'slots', nonce });
@@ -53,38 +75,38 @@ describe('reel strips', () => {
 
 describe('line evaluation', () => {
   it('pays a run of three from reel one', () => {
-    expect(evaluateLine([CHERRY, CHERRY, CHERRY, LEMON, SEVEN])).toEqual({
+    expect(evaluateLine(M, [CHERRY, CHERRY, CHERRY, LEMON, SEVEN])).toEqual({
       symbol: CHERRY, count: 3, units: (PAYTABLE[CHERRY] as readonly number[])[0],
     });
   });
 
   it('does not pay a run that starts on reel two', () => {
-    expect(evaluateLine([LEMON, CHERRY, CHERRY, CHERRY, SEVEN])).toBeNull();
+    expect(evaluateLine(M, [LEMON, CHERRY, CHERRY, CHERRY, SEVEN])).toBeNull();
   });
 
   it('lets wilds substitute', () => {
-    expect(evaluateLine([WILD, CHERRY, CHERRY, LEMON, LEMON])).toEqual({
+    expect(evaluateLine(M, [WILD, CHERRY, CHERRY, LEMON, LEMON])).toEqual({
       symbol: CHERRY, count: 3, units: (PAYTABLE[CHERRY] as readonly number[])[0],
     });
   });
 
   it('pays a leading wild run at whichever reading is worth more', () => {
     // Three wilds then two sevens: five sevens (1500) beats three wilds (125).
-    expect(evaluateLine([WILD, WILD, WILD, SEVEN, SEVEN])).toEqual({
+    expect(evaluateLine(M, [WILD, WILD, WILD, SEVEN, SEVEN])).toEqual({
       symbol: SEVEN, count: 5, units: (PAYTABLE[SEVEN] as readonly number[])[2],
     });
     // Three wilds then two cherries: three wilds (125) beats five cherries (60).
-    expect(evaluateLine([WILD, WILD, WILD, CHERRY, CHERRY])).toEqual({
+    expect(evaluateLine(M, [WILD, WILD, WILD, CHERRY, CHERRY])).toEqual({
       symbol: WILD, count: 3, units: (PAYTABLE[WILD] as readonly number[])[0],
     });
   });
 
   it('never pays scatters on a line', () => {
-    expect(evaluateLine([SCATTER, SCATTER, SCATTER, SCATTER, SCATTER])).toBeNull();
+    expect(evaluateLine(M, [SCATTER, SCATTER, SCATTER, SCATTER, SCATTER])).toBeNull();
   });
 
   it('stops a run at the first mismatch', () => {
-    expect(evaluateLine([CROWN, CROWN, CROWN, CROWN, LEMON])).toEqual({
+    expect(evaluateLine(M, [CROWN, CROWN, CROWN, CROWN, LEMON])).toEqual({
       symbol: CROWN, count: 4, units: (PAYTABLE[CROWN] as readonly number[])[1],
     });
   });
@@ -97,7 +119,7 @@ describe('grid evaluation', () => {
       row(CHERRY, SCATTER, LEMON, CHERRY, LEMON),
       row(LEMON, CHERRY, SCATTER, LEMON, CHERRY),
     );
-    const spin = evaluateGrid(g, 1, false);
+    const spin = evaluateGrid(M, g, 1, false);
     expect(spin.scatterCount).toBe(3);
     expect(spin.scatterUnits).toBe((SCATTER_PAYS[3] as number) * LINE_COUNT);
     expect(spin.freeSpinsAwarded).toBe(FREE_SPIN_AWARD[3]);
@@ -109,7 +131,7 @@ describe('grid evaluation', () => {
       row(CHERRY, SCATTER, LEMON, CHERRY, LEMON),
       row(LEMON, CHERRY, CROWN, LEMON, CHERRY),
     );
-    const spin = evaluateGrid(g, 1, false);
+    const spin = evaluateGrid(M, g, 1, false);
     expect(spin.scatterUnits).toBe(0);
     expect(spin.freeSpinsAwarded).toBe(0);
   });
@@ -120,8 +142,8 @@ describe('grid evaluation', () => {
       row(LEMON, SEVEN, CROWN, SEVEN, LEMON),
       row(SEVEN, LEMON, SEVEN, CROWN, LEMON),
     );
-    const plain = evaluateGrid(g, 1, false);
-    const bonus = evaluateGrid(g, FREE_SPIN_MULTIPLIER, true);
+    const plain = evaluateGrid(M, g, 1, false);
+    const bonus = evaluateGrid(M, g, FREE_SPIN_MULTIPLIER, true);
     expect(bonus.units).toBe(plain.units * FREE_SPIN_MULTIPLIER);
   });
 
@@ -131,7 +153,7 @@ describe('grid evaluation', () => {
       row(CHERRY, CHERRY, CHERRY, SEVEN, SEVEN),
       row(LEMON, LEMON, LEMON, LEMON, LEMON),
     );
-    const spin = evaluateGrid(g, 1, false);
+    const spin = evaluateGrid(M, g, 1, false);
     const middle = spin.lineWins.find((w) => w.lineIndex === 0);
     expect(middle?.positions).toEqual([[0, 1], [1, 1], [2, 1]]);
   });
@@ -139,7 +161,7 @@ describe('grid evaluation', () => {
 
 describe('spinning', () => {
   it('produces a well-formed grid of real symbols', () => {
-    const g = spinGrid(stream(1));
+    const g = spinGrid(M, stream(1));
     expect(g).toHaveLength(ROWS);
     for (const r of g) {
       expect(r).toHaveLength(REELS);
@@ -148,7 +170,7 @@ describe('spinning', () => {
   });
 
   it('is reproducible from the seed', () => {
-    expect(spinGrid(stream(9))).toEqual(spinGrid(stream(9)));
+    expect(spinGrid(M, stream(9))).toEqual(spinGrid(M, stream(9)));
   });
 
   it('resolves free spins inside the round that triggered them', () => {
@@ -219,71 +241,9 @@ describe('every symbol is presentable', () => {
  *    per-reel distribution comes from scanning all stops, then convolving across reels.
  */
 describe('return to player, exactly', () => {
-  const symbolDistribution = REEL_STRIPS.map((strip) => {
-    const counts = new Map<string, number>();
-    for (const s of strip) counts.set(s, (counts.get(s) ?? 0) + 1);
-    return [...counts.entries()].map(([s, n]) => [s, n / strip.length] as const);
-  });
-
-  /** Exact EV of one payline, in line-bet units. */
-  const lineEV = ((): number => {
-    let ev = 0;
-    const walk = (reel: number, symbols: string[], p: number): void => {
-      if (reel === REELS) {
-        const win = evaluateLine(symbols);
-        if (win) ev += p * win.units;
-        return;
-      }
-      for (const [symbol, ps] of symbolDistribution[reel] as ReadonlyArray<readonly [string, number]>) {
-        walk(reel + 1, [...symbols, symbol], p * ps);
-      }
-    };
-    walk(0, [], 1);
-    return ev;
-  })();
-
-  /** Exact distribution of the number of scatters on screen. */
-  const scatterDistribution = ((): Map<number, number> => {
-    let joint = new Map<number, number>([[0, 1]]);
-    for (const strip of REEL_STRIPS) {
-      const perReel = [0, 0, 0, 0];
-      for (let stop = 0; stop < strip.length; stop += 1) {
-        let n = 0;
-        for (let o = 0; o < ROWS; o += 1) {
-          if (strip[(stop + o) % strip.length] === SCATTER) n += 1;
-        }
-        perReel[n] = (perReel[n] as number) + 1;
-      }
-      const next = new Map<number, number>();
-      for (const [total, p] of joint) {
-        for (let n = 0; n <= ROWS; n += 1) {
-          const pn = (perReel[n] as number) / strip.length;
-          if (pn === 0) continue;
-          next.set(total + n, (next.get(total + n) ?? 0) + p * pn);
-        }
-      }
-      joint = next;
-    }
-    return joint;
-  })();
-
-  let scatterEV = 0;
-  let bonusChance = 0;
-  let freeSpinsPerSpin = 0;
-  for (const [n, p] of scatterDistribution) {
-    if (n < 3) continue;
-    const capped = Math.min(n, 5);
-    scatterEV += p * (SCATTER_PAYS[capped] as number) * LINE_COUNT;
-    bonusChance += p;
-    freeSpinsPerSpin += p * (FREE_SPIN_AWARD[capped] as number);
-  }
-
-  const spinEV = lineEV * LINE_COUNT + scatterEV;
-  // Each free spin can retrigger, so the expected number per round is the sum of a
-  // geometric series in the per-spin award rate.
-  const freeSpinsPerRound = freeSpinsPerSpin / (1 - freeSpinsPerSpin);
-  const roundEV = spinEV + freeSpinsPerRound * spinEV * FREE_SPIN_MULTIPLIER;
-  const exactRtp = roundEV / LINE_COUNT;
+  // The derivation moved into the engine so every cabinet has one; this is the same
+  // arithmetic, now a property of the machine rather than of this file.
+  const { rtp: exactRtp, bonusChance, spinUnits: spinEV } = exactReturn(M);
 
   it('is 94.74%, pinned to four decimal places', () => {
     // Any change to a weight, a paytable entry or the free-spin rules moves this. That
@@ -325,5 +285,128 @@ describe('return to player, exactly', () => {
     }
     expect(hits / rounds).toBeGreaterThan(0.4);
     expect(hits / rounds).toBeLessThan(0.56);
+  });
+});
+
+// ------------------------------------------------------------- the variety pack --
+
+/**
+ * Every cabinet, held to the same standard as the classic.
+ *
+ * The point of making a machine into data is that a new one cannot smuggle in a broken
+ * economy: its return is computable, so it gets pinned exactly, and the structural rules
+ * that made the original work are checked for all of them rather than assumed.
+ */
+describe('the variety pack', () => {
+  it('has exactly these returns, pinned to four decimals', () => {
+    const actual: Record<string, string> = {};
+    for (const m of MACHINES) actual[m.id] = (exactReturn(m).rtp * 100).toFixed(4);
+    expect(actual).toEqual({
+      golden: '94.7374',
+      neon: '95.5178',
+      emerald: '94.8219',
+    });
+  });
+
+  it('keeps every cabinet within a point of the others', () => {
+    // The cabinets are meant to differ in *volatility*, not in how much they return.
+    // Plain rounding of a scaled paytable put them 1.5 points apart with the swingy one
+    // paying least, which is backwards; this is the assertion that caught it.
+    const rtps = MACHINES.map((m) => exactReturn(m).rtp);
+    expect(Math.max(...rtps) - Math.min(...rtps)).toBeLessThan(0.01);
+    for (const rtp of rtps) {
+      expect(rtp).toBeGreaterThan(0.93);
+      expect(rtp).toBeLessThan(0.97);
+    }
+  });
+
+  it('differs in volatility, which is the whole point', () => {
+    const neon = machineById('neon');
+    const emerald = machineById('emerald');
+    // Fewer lines and a steeper top end on one; more lines and a flatter table on the
+    // other. If these ever converge the pack is three copies of one machine.
+    expect(lineCountOf(neon)).toBeLessThan(lineCountOf(GOLDEN_REELS));
+    expect(lineCountOf(emerald)).toBeGreaterThan(lineCountOf(GOLDEN_REELS));
+    expect(exactReturn(neon).topLine).toBeGreaterThan(exactReturn(emerald).topLine * 5);
+    // The flat cabinet buys its bonus more often.
+    expect(exactReturn(emerald).bonusChance).toBeGreaterThan(exactReturn(neon).bonusChance);
+  });
+
+  it('gives every cabinet a well-formed paytable and lines', () => {
+    for (const m of MACHINES) {
+      for (const symbol of m.symbols) {
+        expect(m.glyphs[symbol], `${m.id} ${symbol} glyph`).toBeTruthy();
+        expect(m.names[symbol], `${m.id} ${symbol} name`).toBeTruthy();
+        if (symbol !== SCATTER) expect(m.paytable[symbol], `${m.id} ${symbol}`).toHaveLength(3);
+      }
+      // Nothing pays that is not a symbol on this cabinet.
+      for (const symbol of Object.keys(m.paytable)) expect(m.symbols).toContain(symbol);
+
+      expect(m.paylines.length).toBeGreaterThan(0);
+      expect(new Set(m.paylines.map((p) => p.join(''))).size).toBe(m.paylines.length);
+      for (const pattern of m.paylines) {
+        expect(pattern).toHaveLength(REELS);
+        for (const r of pattern) {
+          expect(r).toBeGreaterThanOrEqual(0);
+          expect(r).toBeLessThan(ROWS);
+        }
+      }
+
+      // Five reels, and a strip that never shows three of a kind from one stop.
+      const strips = stripsOf(m);
+      expect(strips).toHaveLength(REELS);
+      for (const strip of strips) {
+        for (let i = 0; i < strip.length; i += 1) {
+          const a = strip[i] as string;
+          const b = strip[(i + 1) % strip.length] as string;
+          const c = strip[(i + 2) % strip.length] as string;
+          expect(a === b && b === c, `${m.id} blocked strip at ${i}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('pays more per line the more of a symbol lands, on every cabinet', () => {
+    for (const m of MACHINES) {
+      for (const [symbol, pays] of Object.entries(m.paytable)) {
+        expect(pays[1], `${m.id} ${symbol} 4-of-a-kind`).toBeGreaterThan(pays[0]);
+        expect(pays[2], `${m.id} ${symbol} 5-of-a-kind`).toBeGreaterThan(pays[1]);
+      }
+      // And the wild is the best symbol on the cabinet, as the rarest should be.
+      const wildTop = (m.paytable[WILD] as readonly number[])[2] as number;
+      for (const [symbol, pays] of Object.entries(m.paytable)) {
+        if (symbol === WILD) continue;
+        expect(wildTop, `${m.id} wild vs ${symbol}`).toBeGreaterThan(pays[2]);
+      }
+    }
+  });
+
+  it('plays every cabinet from the round API', () => {
+    for (const m of MACHINES) {
+      const result = slots.play({ machine: m.id }, 100, stream(7));
+      expect(result.detail.machine).toBe(m.id);
+      expect(result.detail.lineCount).toBe(lineCountOf(m));
+      expect(result.detail.spins[0]?.grid).toHaveLength(ROWS);
+      // Only this cabinet's symbols may appear on it.
+      for (const spin of result.detail.spins) {
+        for (const row of spin.grid) for (const cell of row) expect(m.symbols).toContain(cell);
+      }
+      expect(result.payout).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('defaults to the classic and refuses a cabinet that does not exist', () => {
+    expect(slots.play({}, 100, stream(3)).detail.machine).toBe('golden');
+    expect(() => slots.validateConfig({ machine: 'jackpot-city' })).toThrow(/unknown slot machine/);
+    expect(() => machineById('nope')).toThrow(/unknown slot machine/);
+  });
+
+  it('draws five stops per spin whatever the cabinet', () => {
+    for (const m of MACHINES) {
+      const source = stream(21);
+      const before = source.bytesUsed;
+      spinGrid(m, source);
+      expect(source.bytesUsed - before, m.id).toBe(REELS * 4);
+    }
   });
 });

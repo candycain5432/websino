@@ -1,6 +1,6 @@
 import {
-  FREE_SPIN_MULTIPLIER, LINE_COUNT, PAYTABLE, REELS, ROWS, SCATTER, SYMBOL_GLYPHS,
-  SYMBOL_NAMES, SYMBOLS, WILD, type SlotsDetail, type Spin,
+  exactReturn, lineCountOf, machineById, MACHINES, REELS, ROWS, SCATTER, WILD,
+  type SlotMachine, type SlotsDetail, type Spin,
 } from '@websino/engine';
 import { useEffect, useRef, useState } from 'react';
 
@@ -12,9 +12,12 @@ import './SlotsGame.css';
 /** How long each spin of a bonus stays on screen before the next one. */
 const BONUS_SPIN_MS = 850;
 
-const BLANK_GRID: string[][] = Array.from({ length: ROWS }, (_, row) =>
-  Array.from({ length: REELS }, (_, col) => SYMBOLS[(row * REELS + col) % SYMBOLS.length] as string),
-);
+/** A still screen for a cabinet nobody has spun yet - its own symbols, not another's. */
+const blankGrid = (machine: SlotMachine): string[][] =>
+  Array.from({ length: ROWS }, (_, row) =>
+    Array.from({ length: REELS }, (_, col) =>
+      machine.symbols[(row * REELS + col) % machine.symbols.length] as string),
+  );
 
 export function SlotsGame({
   transport,
@@ -28,6 +31,7 @@ export function SlotsGame({
   onBack: () => void;
 }) {
   const [bet, setBet] = useState(20);
+  const [cabinet, setCabinet] = useState(MACHINES[0]?.id ?? 'golden');
   const [spinning, setSpinning] = useState(false);
   const [detail, setDetail] = useState<SlotsDetail | null>(null);
   const [shown, setShown] = useState(0);
@@ -38,14 +42,14 @@ export function SlotsGame({
   useEffect(() => () => { for (const t of timers.current) window.clearTimeout(t); }, []);
 
   const spin = async (): Promise<void> => {
-    if (spinning || bet > balance || bet < LINE_COUNT) return;
+    if (spinning || bet > balance || bet < lineCount) return;
     setSpinning(true);
     setError(null);
     for (const t of timers.current) window.clearTimeout(t);
     timers.current = [];
 
     try {
-      const result = await transport.play({ game: 'slots', bet, config: {} });
+      const result = await transport.play({ game: 'slots', bet, config: { machine: cabinet } });
       const next = result.detail as SlotsDetail;
       setDetail(next);
       setShown(0);
@@ -81,10 +85,20 @@ export function SlotsGame({
     }
   };
 
+  /*
+   * The cabinet the *round* used, not the one the picker shows.
+   *
+   * They differ for exactly as long as a result is on screen after the player has
+   * switched cabinets, and rendering last round's grid with this cabinet's glyphs would
+   * show symbols that were never on those reels.
+   */
+  const machine = machineById(detail?.machine ?? cabinet);
+  const lineCount = lineCountOf(machine);
+  const lineBet = bet / lineCount;
+
   const spins: Spin[] = detail?.spins ?? [];
   const current: Spin | undefined = spins[shown];
-  const grid = current?.grid ?? BLANK_GRID;
-  const lineBet = bet / LINE_COUNT;
+  const grid = current?.grid ?? blankGrid(machine);
 
   // Cells that are part of a win on the spin currently on screen.
   const lit = new Set<string>();
@@ -105,8 +119,11 @@ export function SlotsGame({
 
   return (
     <GameShell
-      title="Golden Reels"
-      subtitle={`5 reels · ${LINE_COUNT} lines · RTP 94.74% · free spins pay ${FREE_SPIN_MULTIPLIER}×`}
+      title={machine.name}
+      subtitle={
+        `5 reels · ${lineCount} lines · RTP ${(exactReturn(machine).rtp * 100).toFixed(2)}%`
+        + ` · free spins pay ${machine.freeSpinMultiplier}×`
+      }
       transport={transport}
       balance={balance}
       bet={bet}
@@ -118,7 +135,7 @@ export function SlotsGame({
       board={
         <div className="slots">
           <div className={`slots__machine${current?.isFreeSpin ? ' is-bonus' : ''}`}>
-            <div className="slots__grid" role="img" aria-label={describeGrid(grid)}>
+            <div className="slots__grid" role="img" aria-label={describeGrid(machine, grid)}>
               {grid.map((row, r) =>
                 row.map((symbol, c) => (
                   <span
@@ -131,7 +148,7 @@ export function SlotsGame({
                     ].filter(Boolean).join(' ')}
                     style={{ animationDelay: `${c * 60}ms` }}
                   >
-                    {SYMBOL_GLYPHS[symbol as keyof typeof SYMBOL_GLYPHS] ?? symbol}
+                    {machine.glyphs[symbol] ?? symbol}
                   </span>
                 )),
               )}
@@ -139,7 +156,7 @@ export function SlotsGame({
 
             {current?.isFreeSpin && (
               <div className="slots__bonus-badge">
-                Free spin · {FREE_SPIN_MULTIPLIER}×
+                Free spin · {machine.freeSpinMultiplier}×
                 {freeSpinsLeft > 0 && <span> · {freeSpinsLeft} to go</span>}
               </div>
             )}
@@ -158,10 +175,10 @@ export function SlotsGame({
               {current.lineWins.slice(0, 6).map((win) => (
                 <li key={win.lineIndex}>
                   <span className="slots__line-symbol">
-                    {SYMBOL_GLYPHS[win.symbol as keyof typeof SYMBOL_GLYPHS]}
+                    {machine.glyphs[win.symbol]}
                   </span>
                   <span>
-                    {win.count}× {SYMBOL_NAMES[win.symbol as keyof typeof SYMBOL_NAMES]} on line{' '}
+                    {win.count}× {machine.names[win.symbol]} on line{' '}
                     {win.lineIndex + 1}
                   </span>
                   <span className="numeric">
@@ -180,15 +197,37 @@ export function SlotsGame({
       }
       controls={
         <div className="slots__controls">
+          <fieldset className="slots__set">
+            <legend>Cabinet</legend>
+            <div className="slots__cabinets">
+              {MACHINES.map((option) => (
+                <button
+                  key={option.id}
+                  className={`cabinet${cabinet === option.id ? ' is-active' : ''}`}
+                  style={{ '--cabinet-accent': option.accent } as React.CSSProperties}
+                  onClick={() => setCabinet(option.id)}
+                  disabled={spinning}
+                >
+                  <span className="cabinet__name">{option.name}</span>
+                  <span className="cabinet__blurb">{option.blurb}</span>
+                  {/* Quoted per cabinet because they genuinely differ, if only slightly. */}
+                  <span className="cabinet__rtp numeric">
+                    RTP {(exactReturn(option).rtp * 100).toFixed(2)}%
+                  </span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           <p className="slots__stake">
             <span>Line bet</span>
             <strong className="numeric">{(lineBet).toFixed(2)}</strong>
           </p>
 
-          {bet < LINE_COUNT && (
+          {bet < lineCount && (
             <p className="slots__warn">
-              All {LINE_COUNT} lines are always in play, so the stake is split between them.
-              Bet at least {LINE_COUNT} to keep every line worth a whole chip.
+              All {lineCount} lines are always in play, so the stake is split between them.
+              Bet at least {lineCount} to keep every line worth a whole chip.
             </p>
           )}
 
@@ -209,13 +248,13 @@ export function SlotsGame({
                 <tr><th>Symbol</th><th>3</th><th>4</th><th>5</th></tr>
               </thead>
               <tbody>
-                {SYMBOLS.filter((s) => s !== SCATTER).map((symbol) => (
+                {machine.symbols.filter((s) => s !== SCATTER).map((symbol) => (
                   <tr key={symbol} className={symbol === WILD ? 'is-wild' : ''}>
                     <th scope="row">
-                      <span className="slots__line-symbol">{SYMBOL_GLYPHS[symbol]}</span>
-                      {SYMBOL_NAMES[symbol]}
+                      <span className="slots__line-symbol">{machine.glyphs[symbol]}</span>
+                      {machine.names[symbol]}
                     </th>
-                    {(PAYTABLE[symbol] ?? []).map((pay, i) => (
+                    {(machine.paytable[symbol] ?? []).map((pay, i) => (
                       <td key={i} className="numeric">{pay}</td>
                     ))}
                   </tr>
@@ -224,8 +263,9 @@ export function SlotsGame({
             </table>
             <p>
               Pays are multiples of the line bet, left to right from reel one. Wilds
-              substitute for everything except scatters. Three scatters anywhere pay 4× the
-              total bet and buy 10 free spins at {FREE_SPIN_MULTIPLIER}×.
+              substitute for everything except scatters. Three scatters anywhere pay{' '}
+              {machine.scatterPays[3]}× the total bet and buy {machine.freeSpinAward[3]} free
+              spins at {machine.freeSpinMultiplier}×.
             </p>
           </details>
         </div>
@@ -234,8 +274,6 @@ export function SlotsGame({
   );
 }
 
-function describeGrid(grid: readonly (readonly string[])[]): string {
-  return grid
-    .map((row) => row.map((s) => SYMBOL_NAMES[s as keyof typeof SYMBOL_NAMES] ?? s).join(', '))
-    .join('; ');
+function describeGrid(machine: SlotMachine, grid: readonly (readonly string[])[]): string {
+  return grid.map((row) => row.map((s) => machine.names[s] ?? s).join(', ')).join('; ');
 }

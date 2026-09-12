@@ -52,7 +52,7 @@ if (out) await page.screenshot({ path: `${out}/offline.png` });
 // The three games added since this script was written must work here too - offline is
 // not a cut-down build, it is the same engine with a local dealer.
 for (const [game, action] of [
-  ['Golden Reels', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'],
+  ['Slots', 'Spin'], ['Blackjack', 'Deal'], ['Crash', 'Bet'],
   ['Mines', 'New board'], ['Jacks or Better', 'Deal · 25'],
   ['Plinko', /^Drop for/], ['Wheel of Fortune', /^Spin for/],
   ['Hi-Lo', /^Deal for/], ['Towers', /^Climb for/],

@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 564 tests
+pnpm test         # 572 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -38,15 +38,15 @@ Node 22+ and pnpm 10+.
 
 | | |
 |---|---|
-| **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune, Hi-Lo, Towers |
+| **Games** | Texas Hold'em, Blackjack, Roulette, Slots (three cabinets), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune, Hi-Lo, Towers |
 | **Multiplayer** | Shared hold'em tables over WebSocket — six seats, server-held turn clock, bots filling the empties |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 564, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 572, covering payout maths, chip conservation and seed secrecy |
 
-The slots variety pack, shared-round Bingo and shared-table blackjack and roulette are
-next — see [Roadmap](#roadmap).
+Shared-round Bingo and shared-table blackjack and roulette are next — see
+[Roadmap](#roadmap).
 
 ---
 
@@ -227,11 +227,40 @@ The dealer's hole card is **absent** from the payload while it is face down — 
 and hidden by the UI. A player with the network tab open learns exactly as much as one
 without.
 
-### Golden Reels
+### Slots — three cabinets
 
 ![Golden Reels](docs/screenshots/slots.png)
 
-Five reels, three rows, twenty paylines, each reel with its own weighted strip. Wilds
+**A slot machine here is data, not code.** Symbols, paytable, paylines, per-reel weights
+and the bonus rules are a record; everything in the engine is the shared mechanism that
+reads one. Adding a cabinet is adding a record, which is what "variety pack" has to mean
+if the tuning of the original is to survive it — and Golden Reels' figures are unchanged,
+which the pinned return below proves rather than asserts.
+
+| | Lines | RTP | Top line | Character |
+|---|---|---|---|---|
+| **Golden Reels** | 20 | 94.7374% | 5,000× | the house classic, balanced |
+| **Neon Nights** | 10 | 95.5178% | 6,000× | half the lines, steep top end |
+| **Emerald Rush** | 25 | 94.8219% | 800× | flat table, something lands most spins |
+
+![Neon Nights](docs/screenshots/slots-neon.png)
+
+The cabinets differ in **volatility, not in what they return** — all three land within a
+point of each other, and each one's figure is quoted on its own button. Getting there
+took a method rather than a feel: the payout *shape* was chosen first, then every pay
+scaled by a single ratio (RTP is linear in a uniform scaling of the paytable), then each
+pay snapped to a ladder of numbers a paytable plausibly prints — 5, 25, 125, 600 rather
+than 34, 236, 559 — and the scale swept for the best fit. Plain rounding had pushed the
+two new cabinets a point and a half apart *with the swingy one paying least*, which is
+backwards; there is now a test that catches exactly that.
+
+The exact-return calculation moved out of the test and into the engine, so a new cabinet
+cannot be added without its economics being knowable. That is the point: a slot's
+economics live entirely in numbers nobody can eyeball.
+
+---
+
+Five reels, three rows, each reel with its own weighted strip. Wilds
 substitute for everything except scatters, and three or more scatters anywhere buy free
 spins that pay double and can retrigger.
 
@@ -536,7 +565,7 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Mines, video poker, solo roulette
 - [x] Plinko and Wheel of Fortune (solo), both with derived payout tables
 - [x] Hi-Lo and Towers, both priced so every cash-out point is worth the same
-- [ ] Slots variety pack
+- [x] Slots variety pack — three cabinets from one engine
 - [ ] Bingo as a shared round
 - [x] Hold'em against bots, with a rake so the table is a sink rather than a faucet
 - [x] Shared tables: several humans at one hold'em table
