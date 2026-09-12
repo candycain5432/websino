@@ -18,6 +18,20 @@
 import { blackjackValue, type Card, isAce } from '../../cards.js';
 import { drawCard, needsShuffle, type ShoeState } from '../../shoe.js';
 
+/**
+ * A move the rules do not allow in this position.
+ *
+ * Typed rather than a bare `Error` so the server can answer 400 instead of 500: a client
+ * asking to split a 7 and a King is making a mistake, not exposing a server fault, and
+ * logging it as one buries real errors in noise.
+ */
+export class IllegalActionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IllegalActionError';
+  }
+}
+
 export type Action = 'hit' | 'stand' | 'double' | 'split' | 'surrender';
 export type Phase = 'insurance' | 'player' | 'done';
 export type Outcome = 'blackjack' | 'win' | 'push' | 'lose' | 'bust' | 'surrender';
@@ -145,7 +159,7 @@ export function deal(
   bet: number,
   rules: Rules = DEFAULT_RULES,
 ): BlackjackRound {
-  if (!Number.isInteger(bet) || bet <= 0) throw new Error('bet must be a positive integer');
+  if (!Number.isInteger(bet) || bet <= 0) throw new IllegalActionError('bet must be a positive integer');
 
   const round: BlackjackRound = {
     hands: [makeHand(bet)],
@@ -184,7 +198,7 @@ function peekForNaturals(round: BlackjackRound): BlackjackRound {
 }
 
 export function takeInsurance(round: BlackjackRound, buy: boolean): BlackjackRound {
-  if (round.phase !== 'insurance') throw new Error('insurance is not on offer');
+  if (round.phase !== 'insurance') throw new IllegalActionError('insurance is not on offer');
   if (buy) {
     round.insuranceBet = insuranceCost(round);
     round.staked += round.insuranceBet;
@@ -224,9 +238,9 @@ export function availableActions(round: BlackjackRound): Action[] {
  * and never trusts the client's idea of which buttons were enabled.
  */
 export function act(round: BlackjackRound, action: Action, shoe: ShoeState): BlackjackRound {
-  if (round.phase !== 'player') throw new Error(`cannot act in phase ${round.phase}`);
+  if (round.phase !== 'player') throw new IllegalActionError(`cannot act in phase ${round.phase}`);
   if (!availableActions(round).includes(action)) {
-    throw new Error(`${action} is not available right now`);
+    throw new IllegalActionError(`${action} is not available right now`);
   }
   const hand = activeHand(round) as Hand;
 
