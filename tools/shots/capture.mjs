@@ -117,6 +117,64 @@ const cashOut = page.getByRole('button', { name: /Cash out/ });
 if (await cashOut.count()) { await cashOut.click(); await page.waitForTimeout(500); }
 await shot('10-crash-settled');
 
+console.log('roulette');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Roulette/ }).first().click();
+await page.waitForTimeout(300);
+// Put chips on a spread of bet types, then spin.
+// Number spots are labelled by the number itself, so match exactly. Every click here
+// is guarded: a selector that silently waits 30s for an element that never appears
+// turns a verification step into a coin flip.
+await page.locator('.felt').waitFor({ timeout: 10_000 });
+for (const name of ['17', '23']) {
+  const spot = page.getByRole('button', { name, exact: true });
+  if (await spot.count()) await spot.first().click();
+}
+for (const label of [/^Red$/, /^25–36$/]) {
+  const spot = page.getByRole('button', { name: label });
+  if (await spot.count()) await spot.first().click();
+}
+await shot('14-roulette-bets');
+await page.getByRole('button', { name: 'Spin', exact: true }).click();
+await page.waitForTimeout(800);
+await shot('15-roulette');
+
+console.log('mines');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Mines/ }).first().click();
+await page.waitForTimeout(300);
+await page.locator('.mines__grid').waitFor({ timeout: 10_000 });
+await page.getByRole('button', { name: 'New board', exact: true }).click();
+await page.waitForTimeout(400);
+// Reveal a few tiles; stop as soon as the board ends.
+for (let i = 0; i < 4; i += 1) {
+  const tile = page.getByRole('button', { name: `tile ${i + 1}`, exact: true });
+  if (!(await tile.count())) break;
+  await tile.click();
+  await page.waitForTimeout(300);
+}
+await shot('16-mines');
+const cashMines = page.getByRole('button', { name: /Cash out/ });
+if (await cashMines.count()) { await cashMines.click(); await page.waitForTimeout(500); }
+await shot('17-mines-settled');
+
+console.log('video poker');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Jacks or Better/ }).first().click();
+await page.waitForTimeout(300);
+await page.locator('.vp__hand').waitFor({ timeout: 10_000 });
+await page.getByRole('button', { name: /^Deal/ }).click();
+await page.waitForTimeout(500);
+const vpHint = page.getByRole('button', { name: /best play/ });
+if (await vpHint.count()) { await vpHint.click(); await page.waitForTimeout(500); }
+await shot('18-videopoker-holds');
+await page.getByRole('button', { name: 'Draw', exact: true }).click();
+await page.waitForTimeout(600);
+await shot('19-videopoker');
+
 // Mobile, since the pygame version could never do this at all.
 await page.setViewportSize({ width: 402, height: 860 });
 await page.waitForTimeout(300);
@@ -129,6 +187,11 @@ await page.waitForTimeout(300);
 await page.getByRole('button', { name: 'Deal', exact: true }).click();
 await page.waitForTimeout(700);
 await shot('13-blackjack-mobile');
+await page.getByRole('button', { name: /lobby/i }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: /Roulette/ }).first().click();
+await page.waitForTimeout(400);
+await shot('20-roulette-mobile');
 
 /*
  * Geometry check, not a screenshot: every rank's corners must stay inside the card.

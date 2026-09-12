@@ -9,6 +9,22 @@ export function comb(n: number, k: number): number {
   return Math.round(result);
 }
 
+/**
+ * `C(taken, k) / C(total, k)`, as a running product rather than a quotient of two
+ * factorials.
+ *
+ * This is the probability of drawing `k` items all from the `taken` subset, and it is
+ * what mines' multiplier table inverts. Written as `prod (taken - i) / (total - i)` it
+ * stays in a sane numeric range for every k, and each factor is a probability in its own
+ * right - the chance the *next* pick is safe given the ones before it.
+ */
+export function chooseRatio(taken: number, total: number, k: number): number {
+  if (k < 0 || k > taken || taken > total) return 0;
+  let ratio = 1;
+  for (let i = 0; i < k; i += 1) ratio *= (taken - i) / (total - i);
+  return ratio;
+}
+
 /** `itertools.combinations` as a generator. */
 export function* combinations<T>(items: readonly T[], k: number): Generator<T[]> {
   const n = items.length;

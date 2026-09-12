@@ -13,7 +13,7 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { z } from 'zod';
 
-import { blackjack, InvalidBetError } from '@websino/engine';
+import { blackjack, InvalidBetError, mines, videopoker } from '@websino/engine';
 
 import { AuthError, SESSION_COOKIE, createSession, destroySession, login, register, resolveSession } from './auth/index.js';
 import { openDatabase, type Db } from './db/index.js';
@@ -21,8 +21,10 @@ import { auditBalances, getBalance, InsufficientChipsError, recentLedger } from 
 import { publicState, rotate, setClientSeed } from './fair/seeds.js';
 import { GAMES, playRound } from './rounds.js';
 import {
-  actBlackjack, blackjackStatus, cashOutCrash, crashStatus, dealBlackjack,
-  insureBlackjack, NoSuchSessionError, SessionConflictError, startCrashRound,
+  actBlackjack, blackjackStatus, cashOutCrash, cashOutMines, crashStatus,
+  dealBlackjack, dealVideoPoker, drawVideoPoker, holdVideoPoker, insureBlackjack,
+  minesStatus, NoSuchSessionError, revealMinesTile, SessionConflictError,
+  startCrashRound, startMinesRound, videoPokerStatus,
 } from './sessions.js';
 
 const credentials = z.object({
@@ -67,7 +69,11 @@ export async function buildServer(db: Db = openDatabase()) {
     if (error instanceof SessionConflictError) return reply.code(409).send({ error: message });
     // An illegal move is the client's mistake. Answering 500 would both mislead the
     // client and bury genuine server faults in the log.
-    if (error instanceof blackjack.IllegalActionError) {
+    if (
+      error instanceof blackjack.IllegalActionError ||
+      error instanceof mines.MinesError ||
+      error instanceof videopoker.VideoPokerError
+    ) {
       return reply.code(400).send({ error: message });
     }
 
@@ -180,6 +186,62 @@ export async function buildServer(db: Db = openDatabase()) {
   });
 
   app.get('/api/blackjack', async (request) => blackjackStatus(db, requireUser(request).id));
+
+  // ---------------------------------------------------------------- mines --
+  // One request per tile. The board is never sent while the round is live, so a
+  // reveal has to be asked for and the server answers one square at a time.
+  app.post('/api/mines/start', async (request) => {
+    const user = requireUser(request);
+    const body = z
+      .object({
+        bet: z.number().int().positive(),
+        mines: z.number().int().min(1).max(24),
+      })
+      .parse(request.body);
+    return startMinesRound(db, user.id, body.bet, body.mines);
+  });
+
+  app.post('/api/mines/reveal', async (request) => {
+    const user = requireUser(request);
+    const { position } = z
+      .object({ position: z.number().int().min(0).max(24) })
+      .parse(request.body);
+    return revealMinesTile(db, user.id, position);
+  });
+
+  app.post('/api/mines/cashout', async (request) => cashOutMines(db, requireUser(request).id));
+
+  app.get('/api/mines', async (request) => minesStatus(db, requireUser(request).id));
+
+  // ----------------------------------------------------------- videopoker --
+  app.post('/api/videopoker/deal', async (request) => {
+    const user = requireUser(request);
+    const body = z
+      .object({
+        coins: z.number().int().min(1).max(5),
+        coinValue: z.number().int().positive(),
+      })
+      .parse(request.body);
+    return dealVideoPoker(db, user.id, body.coins, body.coinValue);
+  });
+
+  app.post('/api/videopoker/hold', async (request) => {
+    const user = requireUser(request);
+    const { held } = z
+      .object({ held: z.array(z.boolean()).length(5) })
+      .parse(request.body);
+    return holdVideoPoker(db, user.id, held);
+  });
+
+  app.post('/api/videopoker/draw', async (request) => {
+    const user = requireUser(request);
+    const { held } = z
+      .object({ held: z.array(z.boolean()).length(5) })
+      .parse(request.body);
+    return drawVideoPoker(db, user.id, held);
+  });
+
+  app.get('/api/videopoker', async (request) => videoPokerStatus(db, requireUser(request).id));
 
   return app;
 }

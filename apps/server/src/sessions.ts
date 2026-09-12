@@ -20,8 +20,9 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  assertValidBet, blackjack, crash, shuffleShoe,
-  type BlackjackView, type CrashView, type ShoeState,
+  assertValidBet, blackjack, crash, mines, shuffleShoe, videopoker,
+  type BlackjackView, type CrashView, type MinesView, type ShoeState,
+  type VideoPokerView,
 } from '@websino/engine';
 
 import type { Db } from './db/index.js';
@@ -395,4 +396,221 @@ export function blackjackStatus(db: Db, userId: string): BlackjackView | null {
   const row = openSession(db, userId, 'blackjack');
   if (!row) return null;
   return blackjackView(db, userId, row, JSON.parse(row.state_json) as BlackjackState);
+}
+
+// ---------------------------------------------------------------------- mines --
+
+interface MinesState {
+  round: mines.MinesRound;
+}
+
+/**
+ * The board is laid at `start` and the map stays here until the round ends.
+ *
+ * `reveal` answers one tile at a time - the only shape that keeps the server honest
+ * without handing the client the board. Sending the grid and asking the UI not to look
+ * would make the game a formality.
+ */
+function minesView(db: Db, userId: string, row: SessionRow, state: MinesState): MinesView {
+  const round = state.round;
+  const seed = db
+    .prepare('SELECT server_seed_hash FROM seed_pairs WHERE id = ?')
+    .get(row.seed_pair_id) as { server_seed_hash: string };
+
+  const view: MinesView = {
+    state: round.state,
+    bet: round.bet,
+    mines: round.mines,
+    revealed: [...round.revealed],
+    picks: round.revealed.length,
+    multiplier: mines.currentMultiplier(round),
+    payout: mines.currentPayout(round),
+    nextMultiplier: mines.nextMultiplier(round),
+    balance: getBalance(db, userId),
+    proof: { serverSeedHash: seed.server_seed_hash, nonce: row.nonce },
+  };
+
+  // Only once the round is over does the map become public.
+  if (round.state === 'playing') return view;
+  return { ...view, minePositions: [...round.minePositions], hitPosition: round.hitPosition };
+}
+
+function finishMines(db: Db, userId: string, row: SessionRow, state: MinesState): MinesView {
+  const payout = mines.currentPayout(state.round);
+  saveState(db, row.id, state);
+  if (payout > 0) applyLedger(db, userId, [{ delta: payout, reason: 'payout' }]);
+  recordRound(
+    db, userId, 'mines', row, row.staked, payout,
+    { mines: state.round.mines },
+    {
+      revealed: state.round.revealed,
+      minePositions: state.round.minePositions,
+      hitPosition: state.round.hitPosition,
+      state: state.round.state,
+    },
+  );
+  closeSession(db, row.id);
+  return minesView(db, userId, row, state);
+}
+
+export function startMinesRound(
+  db: Db,
+  userId: string,
+  bet: number,
+  mineCount: number,
+): MinesView {
+  if (openSession(db, userId, 'mines')) {
+    throw new SessionConflictError('finish the board in progress first');
+  }
+  assertValidBet(bet, getBalance(db, userId));
+
+  const { stream, seedPairId, nonce } = takeStream(db, userId);
+  const state: MinesState = { round: mines.startMines(bet, mineCount, stream) };
+  const id = randomUUID();
+  const now = Date.now();
+
+  applyLedger(db, userId, [{ delta: -bet, reason: 'wager' }]);
+  db.prepare(
+    `INSERT INTO game_sessions (id, user_id, game, state_json, seed_pair_id, nonce,
+                                staked, started_at, updated_at)
+     VALUES (?, ?, 'mines', ?, ?, ?, ?, ?, ?)`,
+  ).run(id, userId, JSON.stringify(state), seedPairId, nonce, bet, now, now);
+
+  return minesView(
+    db, userId,
+    { id, game: 'mines', state_json: '', seed_pair_id: seedPairId, nonce, staked: bet, started_at: now },
+    state,
+  );
+}
+
+export function revealMinesTile(db: Db, userId: string, position: number): MinesView {
+  const row = openSession(db, userId, 'mines');
+  if (!row) throw new NoSuchSessionError('mines');
+  const state = JSON.parse(row.state_json) as MinesState;
+  state.round = mines.reveal(state.round, position);
+  saveState(db, row.id, state);
+
+  // A bomb ends it; so does clearing the board, which cashes out at the top rung.
+  if (state.round.state !== 'playing') return finishMines(db, userId, row, state);
+  return minesView(db, userId, row, state);
+}
+
+export function cashOutMines(db: Db, userId: string): MinesView {
+  const row = openSession(db, userId, 'mines');
+  if (!row) throw new NoSuchSessionError('mines');
+  const state = JSON.parse(row.state_json) as MinesState;
+  state.round = mines.cashOut(state.round);
+  return finishMines(db, userId, row, state);
+}
+
+export function minesStatus(db: Db, userId: string): MinesView | null {
+  const row = openSession(db, userId, 'mines');
+  if (!row) return null;
+  return minesView(db, userId, row, JSON.parse(row.state_json) as MinesState);
+}
+
+// ----------------------------------------------------------------- videopoker --
+
+interface VideoPokerState {
+  round: videopoker.VideoPokerRound;
+}
+
+/**
+ * The whole deck is shuffled at `deal`, so the replacements are fixed before the player
+ * chooses holds. It must therefore never leave the server while the hand is live - the
+ * view sends the five cards on the table and nothing else.
+ */
+function videoPokerView(
+  db: Db,
+  userId: string,
+  row: SessionRow,
+  state: VideoPokerState,
+): VideoPokerView {
+  const round = state.round;
+  const seed = db
+    .prepare('SELECT server_seed_hash FROM seed_pairs WHERE id = ?')
+    .get(row.seed_pair_id) as { server_seed_hash: string };
+
+  return {
+    phase: round.phase,
+    cards: [...round.cards],
+    held: [...round.held],
+    coins: round.coins,
+    coinValue: round.coinValue,
+    bet: videopoker.betFor(round.coins, round.coinValue),
+    drawn: [...round.drawn],
+    result: round.result,
+    resultName: round.result ? videopoker.HAND_NAMES[round.result] : null,
+    payout: round.payout,
+    balance: getBalance(db, userId),
+    proof: { serverSeedHash: seed.server_seed_hash, nonce: row.nonce },
+  };
+}
+
+export function dealVideoPoker(
+  db: Db,
+  userId: string,
+  coins: number,
+  coinValue: number,
+): VideoPokerView {
+  if (openSession(db, userId, 'videopoker')) {
+    throw new SessionConflictError('finish the hand in progress first');
+  }
+  const bet = videopoker.betFor(coins, coinValue);
+  assertValidBet(bet, getBalance(db, userId));
+
+  const { stream, seedPairId, nonce } = takeStream(db, userId);
+  const state: VideoPokerState = { round: videopoker.deal(coins, coinValue, stream) };
+  const id = randomUUID();
+  const now = Date.now();
+
+  applyLedger(db, userId, [{ delta: -bet, reason: 'wager' }]);
+  db.prepare(
+    `INSERT INTO game_sessions (id, user_id, game, state_json, seed_pair_id, nonce,
+                                staked, started_at, updated_at)
+     VALUES (?, ?, 'videopoker', ?, ?, ?, ?, ?, ?)`,
+  ).run(id, userId, JSON.stringify(state), seedPairId, nonce, bet, now, now);
+
+  return videoPokerView(
+    db, userId,
+    { id, game: 'videopoker', state_json: '', seed_pair_id: seedPairId, nonce, staked: bet, started_at: now },
+    state,
+  );
+}
+
+export function holdVideoPoker(db: Db, userId: string, held: boolean[]): VideoPokerView {
+  const row = openSession(db, userId, 'videopoker');
+  if (!row) throw new NoSuchSessionError('videopoker');
+  const state = JSON.parse(row.state_json) as VideoPokerState;
+  state.round = videopoker.setHolds(state.round, held);
+  saveState(db, row.id, state);
+  return videoPokerView(db, userId, row, state);
+}
+
+export function drawVideoPoker(db: Db, userId: string, held: boolean[]): VideoPokerView {
+  const row = openSession(db, userId, 'videopoker');
+  if (!row) throw new NoSuchSessionError('videopoker');
+  const state = JSON.parse(row.state_json) as VideoPokerState;
+
+  // The holds arrive with the draw, so a dropped "set holds" call cannot silently
+  // discard cards the player meant to keep.
+  state.round = videopoker.drawCards(videopoker.setHolds(state.round, held));
+  saveState(db, row.id, state);
+
+  if (state.round.payout > 0) {
+    applyLedger(db, userId, [{ delta: state.round.payout, reason: 'payout' }]);
+  }
+  recordRound(
+    db, userId, 'videopoker', row, row.staked, state.round.payout,
+    { coins: state.round.coins, coinValue: state.round.coinValue },
+    { cards: state.round.cards, held: state.round.held, result: state.round.result },
+  );
+  closeSession(db, row.id);
+  return videoPokerView(db, userId, row, state);
+}
+
+export function videoPokerStatus(db: Db, userId: string): VideoPokerView | null {
+  const row = openSession(db, userId, 'videopoker');
+  if (!row) return null;
+  return videoPokerView(db, userId, row, JSON.parse(row.state_json) as VideoPokerState);
 }
