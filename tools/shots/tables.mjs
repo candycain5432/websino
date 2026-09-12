@@ -328,6 +328,54 @@ const handsPlayed = async (player) =>
 const hands = await handsPlayed(alice);
 check(hands >= 1, `the table dealt at least one hand (${hands})`);
 
+/*
+ * The rake is the only way chips leave a table, so it has to be real and reported.
+ *
+ * Asserted against settled hands rather than "whatever the view holds right now":
+ * mid-hand `result` is null, so reading it at an arbitrary moment tests the timing of
+ * the poll rather than the rake. This watches until it has seen hands actually finish.
+ */
+const mine = async () =>
+  (await fetch(`${API}/api/tables/mine`, { headers: { cookie: await cookieHeader(alice) } })).json();
+
+/*
+ * Both players keep acting while this polls.
+ *
+ * Left idle they each burn the full twenty-second clock on every street, so a hand can
+ * take minutes and the first version of this simply ran out of window and reported no
+ * rake at all - a test of the poll's patience, not of the rake.
+ */
+const rakes = new Map();
+let sawFlop = false;
+for (let i = 0; i < 80 && rakes.size < 2; i += 1) {
+  for (const player of [alice, bob]) await actIfAble(player);
+
+  const view = (await mine())?.room;
+  if (!view) break;
+  if (view.result) {
+    rakes.set(view.handNumber, view.result.rake);
+    if (view.board.length >= 3) sawFlop = true;
+  }
+  await alice.page.waitForTimeout(500);
+}
+
+const cuts = [...rakes.values()];
+check(rakes.size > 0, `settled hands report the house's cut (${cuts.join(', ')})`);
+check(
+  cuts.every((r) => Number.isInteger(r) && r >= 0 && r <= 60),
+  `every cut is a whole number inside the 3 big blind cap (${cuts.join(', ')})`,
+);
+// No flop, no drop - so a zero cut is only allowed on a hand that never saw one.
+if (sawFlop) {
+  check(cuts.some((r) => r > 0), `the house took a cut once a flop was dealt (${cuts.join(', ')})`);
+}
+
+const limits = (await mine())?.room;
+check(
+  limits?.maxBuyIn <= 2_000,
+  `the table advertises a buy-in a new account can afford (max ${limits?.maxBuyIn})`,
+);
+
 // ------------------------------------------------------------------ stand up --
 
 console.log('\nstanding up');

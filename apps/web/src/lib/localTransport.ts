@@ -485,7 +485,12 @@ export class LocalTransport implements GameTransport {
       handNumber: t.handNumber,
       log: [...t.log],
       result: t.result
-        ? { wentToShowdown: t.result.wentToShowdown, winners: t.result.winners, pots: t.result.pots }
+        ? {
+            wentToShowdown: t.result.wentToShowdown,
+            winners: t.result.winners,
+            pots: t.result.pots,
+            rake: t.result.rake,
+          }
         : null,
       balance: this.#balance,
       proof: this.#proofFor(entry.nonce),

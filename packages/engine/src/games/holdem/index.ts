@@ -106,9 +106,12 @@ export interface ShowdownEntry {
 export interface HandResult {
   winners: number[];
   entries: ShowdownEntry[];
+  /** Pots as they were *paid* - already net of the rake. */
   pots: Pot[];
   board: Card[];
   wentToShowdown: boolean;
+  /** Chips the house took out of this hand. Zero when no flop was dealt. */
+  rake: number;
 }
 
 export interface HoldemTable {
@@ -230,6 +233,57 @@ export function legalActions(table: HoldemTable, player?: HoldemPlayer): HoldemA
     actions.push(table.currentBet > 0 ? 'raise' : 'bet');
   }
   return actions;
+}
+
+// ------------------------------------------------------------------------ rake --
+
+/**
+ * The house's cut, in basis points of the pot.
+ *
+ * Hold'em was the only game here with no house edge, which made a table a *source* of
+ * chips rather than a sink: bots rebuy with house-funded stacks, so a player who beat
+ * them and cashed out was taking chips that had been created for them. Every other game
+ * in the casino takes between 0.5% and 5%; a rake is how a real card room does the same
+ * thing, and it is the smallest change that makes the table consistent with them.
+ */
+export const RAKE_BPS = 500;
+
+/** The cap, in big blinds. Standard, and it keeps the rake off big pots. */
+export const RAKE_CAP_BB = 3;
+
+/**
+ * What the house takes from a hand.
+ *
+ * **No flop, no drop.** A hand that ends before the flop is free - otherwise players
+ * would be paying to fold their blinds, which is the one thing that actually drives
+ * people off a table.
+ */
+export function rakeFor(potTotal: number, bigBlind: number, sawFlop: boolean): number {
+  if (!sawFlop || potTotal <= 0) return 0;
+  return Math.min(Math.floor((potTotal * RAKE_BPS) / 10_000), bigBlind * RAKE_CAP_BB);
+}
+
+/**
+ * Take the rake out of the pots before they are paid.
+ *
+ * Deducted from the main pot first, the way a dealer drops it, and only ever down to
+ * zero - so a pot can never be raked into the negative and a side pot is only touched
+ * once the main pot cannot cover the cut.
+ */
+function takeRake(table: HoldemTable, pots: Pot[]): number {
+  const total = pots.reduce((sum, pot) => sum + pot.amount, 0);
+  const sawFlop = table.board.length > 0;
+  let owed = rakeFor(total, table.bigBlind, sawFlop);
+  const taken = owed;
+
+  for (const pot of pots) {
+    if (owed <= 0) break;
+    const cut = Math.min(owed, pot.amount);
+    pot.amount -= cut;
+    owed -= cut;
+  }
+  if (taken > 0) table.log.push(`house takes ${taken}`);
+  return taken;
 }
 
 // -------------------------------------------------------------------- side pots --
@@ -546,6 +600,7 @@ function finishWithoutShowdown(table: HoldemTable): HoldemTable {
   const pots = buildPots(table.players);
   const entries: ShowdownEntry[] = [];
 
+  const rake = takeRake(table, pots);
   if (winner) {
     const total = pots.reduce((sum, pot) => sum + pot.amount, 0);
     winner.chips += total;
@@ -564,6 +619,7 @@ function finishWithoutShowdown(table: HoldemTable): HoldemTable {
     pots,
     board: [...table.board],
     wentToShowdown: false,
+    rake,
   };
   return table;
 }
@@ -585,6 +641,7 @@ function showdown(table: HoldemTable): HoldemTable {
   const bySeat = new Map(entries.map((e) => [e.seat, e]));
   const payoutOrder = seatsLeftOfButton(table);
   const pots = buildPots(table.players);
+  const rake = takeRake(table, pots);
 
   for (const pot of pots) {
     const eligible = pot.eligible.filter((seat) => ranks.has(seat));
@@ -616,6 +673,7 @@ function showdown(table: HoldemTable): HoldemTable {
     pots,
     board: [...table.board],
     wentToShowdown: true,
+    rake,
   };
   for (const entry of entries) {
     if (entry.description) {

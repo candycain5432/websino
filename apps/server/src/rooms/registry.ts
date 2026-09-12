@@ -419,6 +419,12 @@ export class RoomRegistry {
     for (let guard = 0; guard < 400; guard += 1) {
       if (holdem.isHandOver(room.table)) {
         room.deadline = null;
+        // Counted once per hand: `#advance` is reached many times after settlement,
+        // and the result stays put until the next deal replaces it.
+        if (room.table.result && room.rakedHand !== room.table.handNumber) {
+          room.rakeCollected += room.table.result.rake;
+          room.rakedHand = room.table.handNumber;
+        }
         if (room.nextHandAt === null) room.nextHandAt = now + BETWEEN_HANDS_MS;
         return;
       }
@@ -508,7 +514,11 @@ export class RoomRegistry {
       handsPlayed: room.handsPlayed,
       log: t.log.slice(-12),
       result: t.result
-        ? { wentToShowdown: t.result.wentToShowdown, winners: t.result.winners }
+        ? {
+            wentToShowdown: t.result.wentToShowdown,
+            winners: t.result.winners,
+            rake: t.result.rake,
+          }
         : null,
       balance: userId === null ? 0 : getBalance(this.#db, userId),
     };

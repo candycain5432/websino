@@ -695,6 +695,7 @@ function holdemView(db: Db, userId: string, row: SessionRow, state: HoldemState)
           wentToShowdown: t.result.wentToShowdown,
           winners: t.result.winners,
           pots: t.result.pots,
+          rake: t.result.rake,
         }
       : null,
     balance: getBalance(db, userId),

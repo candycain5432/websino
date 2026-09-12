@@ -317,6 +317,12 @@ function LiveTable({
             <span>Pot</span>
             <strong className="numeric">{formatChips(room.pot)}</strong>
           </div>
+          {/* Shown rather than quietly deducted: it is the player's cost of playing. */}
+          {room.result !== null && room.result.rake > 0 && (
+            <p className="baize__rake">
+              House took <span className="numeric">{formatChips(room.result.rake)}</span>
+            </p>
+          )}
           {room.deadline !== null && <Countdown deadline={room.deadline} turnMs={room.turnMs} />}
           {!room.handInProgress && room.nextHandAt !== null && (
             <p className="baize__next">Next hand shortly…</p>

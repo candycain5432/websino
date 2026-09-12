@@ -301,6 +301,12 @@ export function HoldemGame({
                 <dt>Your stack</dt>
                 <dd className="numeric">{formatChips(you?.chips ?? 0)}</dd>
               </div>
+              {view.result !== null && view.result.rake > 0 && (
+                <div>
+                  <dt>House took</dt>
+                  <dd className="numeric">{formatChips(view.result.rake)}</dd>
+                </div>
+              )}
             </dl>
           )}
 

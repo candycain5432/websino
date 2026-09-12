@@ -5,8 +5,8 @@ import { parseHand } from '../src/cards.js';
 import {
   act, botDecision, buildPots, canAct, contenders, createTable, currentPlayer, dealHand,
   estimateEquity, HoldemError, inHand, isHandOver, legalActions, makePlayer, makeTable,
-  minRaiseTo, playBotTurn, potOf, PROFILES, toCall, totalChips,
-  type HoldemPlayer, type HoldemTable,
+  minRaiseTo, playBotTurn, potOf, PROFILES, RAKE_BPS, RAKE_CAP_BB, rakeFor, toCall,
+  totalChips, type HoldemPlayer, type HoldemTable,
 } from '../src/games/holdem/index.js';
 
 const stream = (nonce: number): FairStream =>
@@ -260,32 +260,122 @@ describe('side pots', () => {
   });
 });
 
+describe('the rake', () => {
+  it('is five percent of the pot, floored', () => {
+    expect(RAKE_BPS).toBe(500);
+    expect(rakeFor(100, 20, true)).toBe(5);
+    expect(rakeFor(39, 20, true)).toBe(1);   // 1.95 floors to 1, never rounds up
+    expect(rakeFor(19, 20, true)).toBe(0);   // a pot too small to rake is free
+  });
+
+  it('caps at three big blinds however large the pot gets', () => {
+    expect(RAKE_CAP_BB).toBe(3);
+    expect(rakeFor(10_000, 20, true)).toBe(60);
+    expect(rakeFor(1_000_000, 20, true)).toBe(60);
+    // The cap scales with the stakes, not with a hardcoded number of chips.
+    expect(rakeFor(1_000_000, 100, true)).toBe(300);
+  });
+
+  it('takes nothing when no flop was dealt', () => {
+    // No flop, no drop. Otherwise players pay to fold their blinds, which is the one
+    // thing that genuinely drives people off a table.
+    expect(rakeFor(10_000, 20, false)).toBe(0);
+    expect(rakeFor(30, 20, false)).toBe(0);
+  });
+
+  it('is not taken from a hand that ends pre-flop', () => {
+    const t = table(3, 1_000);
+    dealHand(t, stream(77));
+    const before = totalChips(t);
+
+    // Everyone folds to the big blind before a flop is ever dealt.
+    let guard = 0;
+    while (!isHandOver(t) && guard < 20) {
+      guard += 1;
+      act(t, legalActions(t).includes('fold') ? 'fold' : 'check');
+    }
+    expect(t.board).toHaveLength(0);
+    expect(t.result?.rake).toBe(0);
+    expect(totalChips(t)).toBe(before);
+  });
+
+  it('is taken once the flop is out, and only ever from the pot', () => {
+    const t = table(3, 1_000);
+    dealHand(t, stream(4));
+
+    // Play to a finish with the cheapest legal action, which reaches a flop.
+    let guard = 0;
+    while (!isHandOver(t) && guard < 80) {
+      guard += 1;
+      const legal = legalActions(t);
+      act(t, legal.includes('check') ? 'check' : legal.includes('call') ? 'call' : 'fold');
+    }
+
+    const result = t.result;
+    expect(t.board.length).toBeGreaterThanOrEqual(3);
+    expect(result?.rake).toBeGreaterThan(0);
+
+    // What the winners were paid is the pot *after* the cut - the house is not paying
+    // itself out of thin air, it is taking from chips the players committed.
+    const paid = (result?.entries ?? []).reduce((n, e) => n + e.won, 0);
+    const pots = (result?.pots ?? []).reduce((n, pot) => n + pot.amount, 0);
+    expect(paid).toBe(pots);
+  });
+
+  it('never rakes a pot into the negative', () => {
+    // A tiny pot with a big blind large enough that the uncapped cut would exceed it.
+    const t = table(2, 40, [1, 2]);
+    dealHand(t, stream(13));
+    let guard = 0;
+    while (!isHandOver(t) && guard < 80) {
+      guard += 1;
+      const legal = legalActions(t);
+      act(t, legal.includes('check') ? 'check' : legal.includes('call') ? 'call' : 'fold');
+    }
+    for (const pot of t.result?.pots ?? []) expect(pot.amount).toBeGreaterThanOrEqual(0);
+    for (const player of t.players) expect(player.chips).toBeGreaterThanOrEqual(0);
+  });
+});
+
 describe('chip conservation', () => {
   /**
-   * The invariant pysino broke, which is why it gets the most coverage here. Chips only
-   * ever move between seats: the total is identical before a hand, after every single
-   * action, and after settlement.
+   * The invariant pysino broke, which is why it gets the most coverage here.
+   *
+   * Chips only ever move between seats, with exactly one exception: the rake, which
+   * leaves the table at settlement. So the total is identical before a hand and after
+   * every single action *within* it, and drops by precisely the rake when the hand
+   * settles - never by a chip more. Stating it as a running total rather than "roughly
+   * conserved" is the point: a leak of any other size still fails.
    */
   it('holds after every action of every hand, bots playing themselves', () => {
     const random = casual(42);
     const t = table(5, 1000);
-    const start = totalChips(t);
+    let expected = totalChips(t);
+    let rakeTaken = 0;
 
     for (let hand = 0; hand < 60; hand += 1) {
       if (t.players.filter((p) => p.chips > 0).length < 2) break;
       dealHand(t, stream(hand));
-      expect(totalChips(t)).toBe(start);
+      expect(totalChips(t)).toBe(expected);
 
       let guard = 0;
       while (!isHandOver(t) && guard < 200) {
         guard += 1;
+        const before = totalChips(t);
         playBotTurn(t, random);
-        expect(totalChips(t)).toBe(start);
+        // Mid-hand nothing leaves the table; only settlement may take the rake, and
+        // only the action that ends the hand can settle it.
+        expect(totalChips(t)).toBe(isHandOver(t) ? before - (t.result?.rake ?? 0) : before);
       }
       expect(isHandOver(t)).toBe(true);
-      expect(totalChips(t)).toBe(start);
+
+      expected -= t.result?.rake ?? 0;
+      rakeTaken += t.result?.rake ?? 0;
+      expect(totalChips(t)).toBe(expected);
     }
     expect(t.handNumber).toBeGreaterThan(5);
+    // The rake is a real sink, not a rounding artefact that happens to be zero.
+    expect(rakeTaken).toBeGreaterThan(0);
   });
 
   it('pays out exactly the pot, never more', () => {
@@ -305,13 +395,16 @@ describe('chip conservation', () => {
 
       const result = t.result;
       expect(result).not.toBeNull();
+      // `pots` are reported as they were paid - already net of the rake - so what the
+      // winners received still has to equal them exactly.
       const potTotal = (result?.pots ?? []).reduce((n, p) => n + p.amount, 0);
       const paid = (result?.entries ?? []).reduce((n, e) => n + e.won, 0);
       expect(paid).toBe(potTotal);
 
-      // And the stacks moved by exactly that much, in aggregate.
+      // And the stacks moved by exactly the rake, in aggregate: the only chips that
+      // left the table are the ones the house took.
       const delta = t.players.reduce((n, p, i) => n + (p.chips - (before[i] as number)), 0);
-      expect(delta).toBe(0);
+      expect(delta).toBe(-(result?.rake ?? 0));
     }
   });
 
