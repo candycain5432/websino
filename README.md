@@ -25,7 +25,7 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 489 tests
+pnpm test         # 516 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
 ```
@@ -39,13 +39,14 @@ Node 22+ and pnpm 10+.
 | | |
 |---|---|
 | **Games** | Texas Hold'em, Blackjack, Roulette, Golden Reels (slots), Jacks or Better, Mines, Crash, Dice, Limbo |
+| **Multiplayer** | Shared hold'em tables over WebSocket — six seats, server-held turn clock, bots filling the empties |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 489, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 516, covering payout maths, chip conservation and seed secrecy |
 
-Shared multiplayer tables, Plinko, Hi-Lo, Towers and Wheel of Fortune are next — see
-[Roadmap](#roadmap).
+Plinko, Hi-Lo, Towers, Wheel of Fortune and shared-table blackjack and roulette are next
+— see [Roadmap](#roadmap).
 
 ---
 
@@ -79,6 +80,53 @@ a player folding their blind would look like it created a side pot.
 Bots take a `CasualSource`. Handing one the fair stream is a **compile error**, not a code
 review catch — pysino's equity estimator drew from the deal's own generator, so a bot
 thinking perturbed the cards still to come.
+
+### Shared tables
+
+![A shared table](docs/screenshots/tables.png)
+
+The same hold'em, with other people in the seats. Six seats per table, and an account
+holds at most one seat across the whole floor — enforced by a unique index, so you cannot
+play yourself.
+
+**The server owns the clock.** A shared table is *live*: it advances on a timer whether or
+not anyone is looking, because somebody else's twenty seconds are running. Every turn
+carries a deadline the server set and broadcast, so every browser counts down to the same
+instant rather than to its own idea of when the turn began. On expiry the seat checks if
+it can and folds if it cannot — the only action that cannot commit chips the player did
+not choose to commit.
+
+**The client sends intents and nothing else.** `sit here`, `call`, `stand up`. It never
+says when it acted, what it holds or what it is owed, and every reply is a freshly built
+per-viewer snapshot. Hole cards are *absent* from a payload that has not earned them —
+not blanked, not nulled — so there is nothing for a patched client to reveal. Two browsers
+at one table are driven headlessly on every change to assert exactly that, in the DOM and
+in the raw payload.
+
+**Snapshots, not diffs.** Reconnecting is the normal case here — a phone locks, a laptop
+sleeps — and a diff protocol needs a story for the client that missed one. Sending the
+whole room makes "did we drop a frame" a question that cannot arise, and makes the first
+message after a reconnect the current truth.
+
+**Disconnecting does not free your chips.** They stay in the pot, the clock keeps running,
+and reconnecting inside a minute restores the seat exactly. The alternative is a player
+escaping a bad spot by pulling a cable. Past the grace period the seat is stood up and the
+stack goes back to the wallet.
+
+**Standing up mid-hand is queued, not refused.** Chips in a live pot cannot come back —
+they may yet be lost — so the request is taken and honoured the moment the hand ends. The
+first version refused it outright, which sounds principled and means clicking into the
+four-second gap between hands and hoping.
+
+Two things a shared table must never do, both tested: stand up a folded player mid-hand
+(their `committed` chips are still in the live pot, so clearing them would shrink the pot
+and destroy chips), or let the table total change while the same people are just playing
+cards. Bots are house-funded and a busted one is replaced, so the felt is not a closed
+system — but a chip may only ever appear on a tick where the seating actually changed.
+
+Rooms are snapshotted to SQLite after every mutation, for the same reason single-player
+sessions are: a seat's buy-in has already left a wallet, so a restart that lost the room
+would strand real stacks.
 
 ### Roulette
 
@@ -289,6 +337,7 @@ packages/
   engine/    pure rules. No I/O, no randomness source. Runs on server AND client.
 apps/
   server/    Fastify + SQLite. The only thing that deals.
+    rooms/   shared tables: seats, the turn clock, and both halves of every chip move
   web/       Vite + React. DOM and CSS, canvas reserved for effects.
 tools/
   sim/       long-run RTP simulation with sigma error bars
@@ -307,6 +356,12 @@ everything regardless. Cheating is prevented by redaction, not by obfuscation.
 and never learn whether it is an authoritative server or the local dealer in this tab.
 That is what stops offline mode from becoming a second, drifting copy of the casino.
 
+**A table's chips move in exactly two places.** `join` debits the buy-in and seats the
+player with it; `leave` credits whatever stack is left and empties the seat. Neither is
+reachable without the other, and every exit — standing up, a queued leave, a grace period
+expiring — goes through the same function, so they cannot disagree about how much came
+back.
+
 **Chips move through exactly one function.** `applyLedger` writes append-only rows;
 `wallets.chips` is only ever a cache of `SUM(ledger.delta)`, and `auditBalances()` asserts
 they agree. pysino shipped a bug where hold'em refunded a buy-in that had never been
@@ -320,6 +375,12 @@ instead of a silent gift.
 ```bash
 pnpm test                         # everything
 npx tsx tools/sim/rtp.ts 500000   # long-run RTP, run when changing payout maths
+
+# Browser verification. Each needs a built client; the last two need a running server.
+node tools/shots/capture.mjs      # every screen on the local dealer, plus card geometry
+node tools/shots/offline.mjs      # the single-file build, played from file://
+node tools/shots/online.mjs       # every game against a real server, asserted in the ledger
+node tools/shots/tables.mjs       # two browsers at one shared table
 ```
 
 The interesting tests are the invariants, not the line coverage:
@@ -337,6 +398,17 @@ The interesting tests are the invariants, not the line coverage:
   the verifier does, and must match what the house reported.
 - **Frozen vectors** — fixed seeds produce pinned outputs forever, so changing outcomes
   has to be deliberate.
+- **Shared tables, clock driven by hand** — a twenty-second turn timer and a sixty-second
+  disconnect grace are untestable in real time, so the tests advance `tick(now)` with an
+  explicit instant instead of sleeping.
+- **Two real browsers, one table** — the one claim no unit test can make. Two Chromium
+  contexts, two sessions, one server: each sees the other by name, each sees two face-up
+  cards and card backs everywhere else, one player's action appears in the other's browser
+  without a reload, and standing up lands as a payout row in the server's own ledger.
+- **No colliding CSS blocks** — the client ships one global stylesheet, so a new screen
+  reusing a class name another screen owns silently inherits its layout. This shipped
+  once (`.felt` was roulette's betting grid and the tables screen claimed it too) and is
+  now a failing test rather than a confusing screenshot.
 
 ---
 
@@ -348,7 +420,8 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Mines, video poker, solo roulette
 - [ ] Plinko, Hi-Lo, Towers, Wheel of Fortune, slots variety pack
 - [x] Hold'em against bots
-- [ ] Shared tables: several humans at one hold'em table, shared blackjack and roulette
+- [x] Shared tables: several humans at one hold'em table
+- [ ] Shared-table blackjack and roulette
 - [ ] Leaderboards, profiles, achievements, XP and levels
 - [ ] PWA install, sound, animation pass
 

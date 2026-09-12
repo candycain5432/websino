@@ -141,3 +141,87 @@ export interface HoldemView {
   balance: number;
   proof: { serverSeedHash: string; nonce: number };
 }
+
+// -------------------------------------------------------------- shared tables --
+
+/**
+ * A shared hold'em table as one viewer is allowed to see it.
+ *
+ * Lives here, next to every other wire DTO, for the reason the whole file exists: the
+ * server builds these and the client renders them, so a renamed field has to fail
+ * `tsc` on both sides rather than turn into `undefined` at runtime.
+ *
+ * Redaction is by absence. `hole` is missing - not blanked, not nulled - for every seat
+ * the viewer has not earned sight of, so there is nothing in the payload for a patched
+ * client to reveal.
+ */
+export interface RoomSeatView {
+  seat: number;
+  occupied: boolean;
+  kind: 'human' | 'bot' | null;
+  /** Stable while the same occupant holds the seat; changes when a bot is replaced. */
+  occupantId: string | null;
+  name: string;
+  style: string | null;
+  connected: boolean;
+  chips: number;
+  bet: number;
+  committed: number;
+  folded: boolean;
+  allIn: boolean;
+  sittingOut: boolean;
+  waiting: boolean;
+  /** Asked to stand up; it happens as soon as the current hand finishes. */
+  leaving: boolean;
+  lastAction: string;
+  wonLast: number;
+  isButton: boolean;
+  isTurn: boolean;
+  /** Present for your own seat, and for everyone still in at a showdown. */
+  hole?: Card[];
+  handDescription?: string | null;
+}
+
+export interface RoomView {
+  id: string;
+  name: string;
+  smallBlind: number;
+  bigBlind: number;
+  minBuyIn: number;
+  maxBuyIn: number;
+  street: string;
+  board: Card[];
+  pot: number;
+  seats: RoomSeatView[];
+  /** Your seat, or null if you are only watching. */
+  you: number | null;
+  toAct: number | null;
+  yourTurn: boolean;
+  actions: string[];
+  toCall: number;
+  minRaiseTo: number;
+  maxRaiseTo: number;
+  /** Epoch ms the current turn expires - every client counts to the same instant. */
+  deadline: number | null;
+  turnMs: number;
+  nextHandAt: number | null;
+  handInProgress: boolean;
+  handNumber: number;
+  handsPlayed: number;
+  log: string[];
+  result: { wentToShowdown: boolean; winners: number[] } | null;
+  balance: number;
+}
+
+export interface RoomSummary {
+  id: string;
+  name: string;
+  smallBlind: number;
+  bigBlind: number;
+  minBuyIn: number;
+  maxBuyIn: number;
+  seated: number;
+  humans: number;
+  seats: number;
+  handsPlayed: number;
+}

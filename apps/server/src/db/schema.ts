@@ -128,6 +128,39 @@ export const MIGRATIONS: Migration[] = [
         ON game_sessions(user_id, game) WHERE closed_at IS NULL;
     `,
   },
+  {
+    id: 3,
+    name: 'rooms',
+    sql: `
+      -- Shared tables. Unlike a single-player session these are *live* - they tick on a
+      -- timer whether or not anyone is looking - but they are still snapshotted here
+      -- after every mutation, for the same reason: a seat's buy-in has already left its
+      -- owner's wallet, so a restart that lost the room would strand real stacks.
+      --
+      -- state_json holds the shuffled deck and every player's hole cards. It is never
+      -- sent anywhere; each connection gets a redacted view built per seat.
+      CREATE TABLE rooms (
+        id         TEXT PRIMARY KEY,
+        game       TEXT NOT NULL,
+        name       TEXT NOT NULL,
+        state_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      -- What each seated account has bought in for, so leaving can only ever return
+      -- chips that were actually debited. One row per occupied seat.
+      CREATE TABLE room_seats (
+        room_id    TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        seat       INTEGER NOT NULL,
+        user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        buy_in     INTEGER NOT NULL,
+        joined_at  INTEGER NOT NULL,
+        PRIMARY KEY (room_id, seat)
+      );
+      -- One seat per account across the whole floor: no playing yourself.
+      CREATE UNIQUE INDEX room_seats_user ON room_seats(user_id);
+    `,
+  },
 ];
 
 export function migrate(db: Database): void {

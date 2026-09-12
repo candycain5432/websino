@@ -9,6 +9,7 @@
  */
 
 import cookie from '@fastify/cookie';
+import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { z } from 'zod';
@@ -20,6 +21,8 @@ import { openDatabase, type Db } from './db/index.js';
 import { auditBalances, getBalance, InsufficientChipsError, recentLedger } from './db/ledger.js';
 import { publicState, rotate, setClientSeed } from './fair/seeds.js';
 import { GAMES, playRound } from './rounds.js';
+import { RoomError, RoomRegistry } from './rooms/registry.js';
+import { registerTableSocket } from './rooms/socket.js';
 import {
   actBlackjack, blackjackStatus, cashOutCrash, cashOutMines, crashStatus,
   dealBlackjack, dealVideoPoker, drawVideoPoker, holdVideoPoker, insureBlackjack,
@@ -43,7 +46,11 @@ export async function buildServer(db: Db = openDatabase()) {
   const app = Fastify({ logger: false });
 
   await app.register(cookie);
+  await app.register(websocket);
   await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
+
+  // Shared tables tick on their own clock, so the registry outlives any one request.
+  const rooms = new RoomRegistry(db);
 
   const requireUser = (request: { cookies: Record<string, string | undefined> }) => {
     const user = resolveSession(db, request.cookies[SESSION_COOKIE]);
@@ -68,6 +75,7 @@ export async function buildServer(db: Db = openDatabase()) {
     if (error instanceof z.ZodError) return reply.code(400).send({ error: 'bad request' });
     if (error instanceof NoSuchSessionError) return reply.code(409).send({ error: message });
     if (error instanceof SessionConflictError) return reply.code(409).send({ error: message });
+    if (error instanceof RoomError) return reply.code(409).send({ error: message });
     // An illegal move is the client's mistake. Answering 500 would both mislead the
     // client and bury genuine server faults in the log.
     if (
@@ -271,6 +279,28 @@ export async function buildServer(db: Db = openDatabase()) {
   app.post('/api/holdem/leave', async (request) => leaveHoldem(db, requireUser(request).id));
 
   app.get('/api/holdem', async (request) => holdemStatus(db, requireUser(request).id));
+
+  // --------------------------------------------------------- shared tables --
+  // The socket at /ws/tables carries everything that happens *at* a table. These two
+  // routes exist so the lobby can list tables and a reconnecting client can find its
+  // seat before opening a socket.
+  app.get('/api/tables', async () => ({ tables: rooms.list() }));
+
+  app.get('/api/tables/mine', async (request) => {
+    const user = requireUser(request);
+    const found = rooms.findSeat(user.id);
+    return found ? { ...found, room: rooms.viewFor(found.roomId, user.id) } : null;
+  });
+
+  registerTableSocket(app, db, rooms);
+
+  // Started here rather than in the registry's constructor so a test can build a server
+  // without a background timer running under it.
+  if (process.env.WEBSINO_NO_TICK !== '1') rooms.start();
+  app.addHook('onClose', async () => rooms.stop());
+
+  // Exposed for tests: driving the clock by hand beats sleeping for twenty seconds.
+  (app as unknown as { rooms: RoomRegistry }).rooms = rooms;
 
   return app;
 }

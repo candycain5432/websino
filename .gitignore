@@ -9,3 +9,6 @@ coverage/
 .env
 .env.local
 .DS_Store
+
+# Scratch output from tools/shots/*.mjs when run without an output directory.
+shots/

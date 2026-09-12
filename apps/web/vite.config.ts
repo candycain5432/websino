@@ -18,5 +18,14 @@ export default defineConfig(({ mode }) => ({
     target: 'es2022',
     ...(mode === 'offline' ? { assetsInlineLimit: 100_000_000, cssCodeSplit: false } : {}),
   },
-  server: { port: 5173, proxy: { '/api': 'http://localhost:3000' } },
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': 'http://localhost:3000',
+      // `ws: true` is the whole point: without it Vite proxies the handshake as an
+      // ordinary GET and the upgrade never happens, so shared tables silently fail
+      // in dev while working in production.
+      '/ws': { target: 'ws://localhost:3000', ws: true },
+    },
+  },
 }));

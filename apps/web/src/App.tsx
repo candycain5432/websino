@@ -15,6 +15,7 @@ import { LocalTransport } from './lib/localTransport.js';
 import type { GameTransport } from './lib/transport.js';
 import { Lobby } from './screens/Lobby.js';
 import { SignIn } from './screens/SignIn.js';
+import { Tables } from './screens/Tables.js';
 
 const OFFLINE_KEY = 'websino.mode.practice.v1';
 /**
@@ -94,6 +95,12 @@ export function App() {
   if (screen === 'mines') return <MinesGame {...shared} />;
   if (screen === 'videopoker') return <VideoPokerGame {...shared} />;
   if (screen === 'holdem') return <HoldemGame {...shared} />;
+  // Shared tables talk to the server directly rather than through a transport: there is
+  // no local dealer for a table other people are sitting at, and pretending otherwise
+  // with a practice implementation would be a different game wearing the same name.
+  if (screen === 'tables' && !practice) {
+    return <Tables balance={balance} onBalance={setBalance} onBack={backToLobby} />;
+  }
 
   return (
     <Lobby
