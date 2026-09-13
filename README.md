@@ -38,15 +38,14 @@ Node 22+ and pnpm 10+.
 
 | | |
 |---|---|
-| **Games** | Texas Hold'em, Blackjack, Roulette, Slots (three cabinets), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune, Hi-Lo, Towers |
-| **Multiplayer** | Shared hold'em tables over WebSocket — six seats, server-held turn clock, bots filling the empties |
+| **Games** | Texas Hold'em, Blackjack, Roulette, Slots (three cabinets), Jacks or Better, Mines, Crash, Dice, Limbo, Plinko, Wheel of Fortune, Hi-Lo, Towers, Bingo |
+| **Multiplayer** | Shared hold'em tables and a shared-round bingo hall, over WebSocket |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
-| **Tests** | 572, covering payout maths, chip conservation and seed secrecy |
+| **Tests** | 617, covering payout maths, chip conservation and seed secrecy |
 
-Shared-round Bingo and shared-table blackjack and roulette are next — see
-[Roadmap](#roadmap).
+Shared-table blackjack and roulette are next — see [Roadmap](#roadmap).
 
 ---
 
@@ -307,6 +306,66 @@ Your cash-out is timed by the **server's** clock. You say only *that* you cashed
 server dates the request. Latency therefore costs you a fraction of a tick rather than
 letting you reach back in time.
 
+### Bingo
+
+![The bingo hall](docs/screenshots/bingo.png)
+
+Seventy-five balls, a 5×5 card with a free centre, and **one ball sequence for everybody
+in the round**. Buy up to four cards during a fifteen-second window; fifty balls are then
+called, and what a card pays depends on how fast it completes a line.
+
+**Fixed odds, not a pool.** This is the one place bingo here departs from a real hall: a
+hall pools the card sales and splits them among the winners. That was the first design and
+it is wrong for this casino twice over — a round with one player becomes a 1% fee for
+watching balls, and every player who joins makes everyone else's share smaller, so the
+other people at the table are your opponents. Fixed odds mean a round is a real game when
+you are alone at two in the morning, and somebody else joining costs you nothing. It is
+also why there are no bots: they would add names to a list and change nothing.
+
+**The paytable is derived, not invented.** Bingo looks like a game you have to simulate,
+and it is not. A card's twelve lines overlap, so "when does the first one complete" is an
+inclusion–exclusion over 4,095 subsets of them — and because the union sizes depend only
+on the card's *geometry*, one table serves every card ever dealt. That gives the exact
+distribution, and the multipliers were then searched over a ladder of numbers a paytable
+plausibly prints until the whole thing returned 99%:
+
+| Line by ball | Pays | Chance |
+|---|---|---|
+| 1–20 | 10× | 2.287% |
+| 21–27 | 2.5× | 6.753% |
+| 28–33 | 1.25× | 12.410% |
+| 34–39 | 1× | 19.362% |
+| 40–45 | 0.75× | 23.195% |
+| 46–50 | 0.4× | 17.431% |
+| never | — | 18.561% |
+
+**99.0014%**, and four cards in five get something back. A test pins every one of those
+figures, so changing the tuning means changing them deliberately, in the same commit.
+
+The sum behind them is computed in exact integer arithmetic rather than in doubles. In
+doubles it was right to eleven decimal places and then reported a probability of
+1.000000000005 at ball 74 — above the 1.0 it reaches at ball 75. Harmless in itself, but a
+cumulative that can go down is a per-ball chance that can come out negative, and the table
+is computed once for the life of the process, so there is nothing to be bought by
+approximating it.
+
+**The reveal is a function of the clock.** The sequence is drawn once, when the window
+closes, and how many balls are showing comes from `drawStartedAt` plus the gap between
+them — so a tick that runs late, twice, or not at all cannot desync the hall from what
+players have already seen.
+
+**The draw stops once every card is settled**, which makes *how many balls this round will
+call* the round's outcome compressed into one number. It is therefore a secret, like a
+crash point: the broadcast deadline advertises the full fifty and the phase simply ends
+early, because a client that knew both the deadline and the ball count could otherwise
+subtract one from the other and learn its own band before a ball came out.
+
+Your cards come off your own fair stream, so they are yours to verify; the ball sequence
+comes off the first buyer's, the same way a shared hold'em shuffle is anchored on a seated
+human rather than on nobody. Stakes are debited at the buy and settled from the tick, so
+walking away from the screen — or losing the connection — cannot cost you a card you paid
+for.
+
 ### Hi-Lo
 
 ![Hi-Lo](docs/screenshots/hilo.png)
@@ -550,6 +609,11 @@ The interesting tests are the invariants, not the line coverage:
   contexts, two sessions, one server: each sees the other by name, each sees two face-up
   cards and card backs everywhere else, one player's action appears in the other's browser
   without a reload, and standing up lands as a payout row in the server's own ledger.
+- **Two real browsers, one ball sequence** — the same idea for bingo, where it *is* the
+  premise. Both browsers buy into one round, and every ball on one screen must be on the
+  other; each holds its own cards and neither payload contains the other's; every marked
+  square is a ball that was actually called; and each card is paid at the tier its
+  completion ball falls in, with the wallet moving by exactly payout minus stake.
 - **No colliding CSS blocks** — the client ships one global stylesheet, so a new screen
   reusing a class name another screen owns silently inherits its layout. This shipped
   once (`.felt` was roulette's betting grid and the tables screen claimed it too) and is
@@ -566,7 +630,7 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Plinko and Wheel of Fortune (solo), both with derived payout tables
 - [x] Hi-Lo and Towers, both priced so every cash-out point is worth the same
 - [x] Slots variety pack — three cabinets from one engine
-- [ ] Bingo as a shared round
+- [x] Bingo as a shared round, priced from an exact inclusion–exclusion
 - [x] Hold'em against bots, with a rake so the table is a sink rather than a faucet
 - [x] Shared tables: several humans at one hold'em table
 - [ ] Shared-table blackjack and roulette
@@ -584,10 +648,18 @@ settled now, and both are cheap to revisit.
 Hold'em, Blackjack and Roulette, and both of these looked like they contradicted that.
 They do not have to. Wheel of Fortune is a weighted spin with no other players in it —
 mechanically a slot, and perfectly good solo, so it adds no multiplayer surface at all.
-Bingo genuinely is pointless alone; the whole game is the race. So it becomes a *shared
-round* rather than a shared table: everyone buys cards, one ball sequence is drawn for
-all of them, first to a pattern wins. That needs no seats, no turn clock and none of the
-hold'em machinery — it reuses the room tick and nothing else.
+Bingo genuinely is pointless alone; the whole game is watching the same balls as everyone
+else. So it becomes a *shared round* rather than a shared table: everyone buys cards and
+one ball sequence is drawn for all of them. That needs no seats, no turn clock and none of
+the hold'em machinery — it reuses the room tick and nothing else.
+
+Building it changed one half of that. "First to a pattern wins" was the plan, and a pool
+split among the winners is what a real hall does — but it makes a solo round a 1% fee for
+watching balls, and it makes every player who joins your opponent, since their win is your
+smaller share. That is the opposite of what a shared round should feel like. So the round
+is shared and the *odds are fixed*: each card is paid on its own, by how fast it completes
+a line, against a table derived from the exact completion distribution. Nobody else
+joining ever costs you anything, and no bots are needed to make a quiet hall playable.
 
 **Bots stay a chip faucet, and the rake is the counterweight.** Removing bot rebuys
 would starve tables, and capping them is fiddly for no real gain. Taking a rake instead

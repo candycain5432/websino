@@ -17,6 +17,7 @@ import { api } from './lib/httpTransport.js';
 import { HttpTransport } from './lib/httpTransport.js';
 import { LocalTransport } from './lib/localTransport.js';
 import type { GameTransport } from './lib/transport.js';
+import { BingoHall } from './screens/BingoHall.js';
 import { Lobby } from './screens/Lobby.js';
 import { SignIn } from './screens/SignIn.js';
 import { Tables } from './screens/Tables.js';
@@ -108,6 +109,12 @@ export function App() {
   // with a practice implementation would be a different game wearing the same name.
   if (screen === 'tables' && !practice) {
     return <Tables balance={balance} onBalance={setBalance} onBack={backToLobby} />;
+  }
+  // Bingo is shared for the same reason and offline for none: a round *is* other people
+  // watching the same balls, and a practice hall would be a single player watching a
+  // sequence drawn for them alone, which is a different game.
+  if (screen === 'bingo' && !practice) {
+    return <BingoHall balance={balance} onBalance={setBalance} onBack={backToLobby} />;
   }
 
   return (

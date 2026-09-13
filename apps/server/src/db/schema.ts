@@ -161,6 +161,33 @@ export const MIGRATIONS: Migration[] = [
       CREATE UNIQUE INDEX room_seats_user ON room_seats(user_id);
     `,
   },
+  {
+    id: 4,
+    name: 'bingo_entries',
+    sql: `
+      -- What each player staked in a bingo round.
+      --
+      -- Bingo has no seats, so it needs its own version of room_seats, and for the same
+      -- reason: a round pays out from the tick, minutes after the chips were debited and
+      -- possibly after a restart, so the payout has to be reconciled against a row that
+      -- proves the debit happened. payout IS NULL means "staked, not yet settled" - and a
+      -- row still NULL for a round the room is no longer running is refunded at start-up,
+      -- which is the only way a lost snapshot can strand chips.
+      CREATE TABLE bingo_entries (
+        room_id   TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        round     INTEGER NOT NULL,
+        user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        cards     INTEGER NOT NULL,
+        stake     INTEGER NOT NULL,
+        staked    INTEGER NOT NULL,
+        payout    INTEGER,
+        bought_at INTEGER NOT NULL,
+        PRIMARY KEY (room_id, round, user_id)
+      );
+      -- One buy per player per round, so a top-up cannot double-debit under a race.
+      CREATE INDEX bingo_entries_open ON bingo_entries(room_id, round) WHERE payout IS NULL;
+    `,
+  },
 ];
 
 export function migrate(db: Database): void {

@@ -1,0 +1,432 @@
+/**
+ * The bingo hall.
+ *
+ * The layout problem here is density: seventy-five numbers on the board, plus up to four
+ * 5x5 cards, all of which have to stay readable on a phone. Everything is therefore sized
+ * in `ch` and `rem` off the number it has to hold rather than in fixed pixels, and both
+ * grids reflow instead of scrolling - a board you have to scroll sideways to read is a
+ * board you cannot scan for your own number, which is the only thing it is for.
+ *
+ * Block names are prefixed (`hall`, `caller`, `bcard`, `buyin`, `btiers`) because the
+ * client ships one global stylesheet. `.felt` and `.tile` were both claimed twice before
+ * `test/styles.test.ts` existed, and both times a screen silently inherited a layout it
+ * had never asked for.
+ */
+
+.hall {
+  max-inline-size: 1100px;
+  margin-inline: auto;
+  padding: var(--space-5) var(--space-4) var(--space-8);
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+}
+
+.hall--loading {
+  min-block-size: 60vh;
+  place-content: center;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------- the bar -- */
+
+.hall__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.hall__back {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+
+.hall__back:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+.hall__titles { flex: 1 1 12rem; }
+.hall__titles h1 { margin: 0; font-size: var(--text-lg); color: var(--gold); }
+.hall__titles p { margin: 2px 0 0; color: var(--text-dim); font-size: var(--text-sm); }
+
+.hall__status {
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--panel-edge);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.hall__status--open { color: var(--win); border-color: color-mix(in srgb, var(--win) 40%, transparent); }
+.hall__status--reconnecting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.hall__status--closed { color: var(--lose); border-color: color-mix(in srgb, var(--lose) 40%, transparent); }
+
+/* ------------------------------------------------------------------ the caller -- */
+
+.caller {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 120% at 50% 0%, var(--felt-light) 0%, var(--felt-dark) 70%);
+  box-shadow: var(--shadow);
+}
+
+.caller__stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+/*
+ * The ball on the lip.
+ *
+ * Keyed on the number in the JSX, so React replaces the element for each new ball and the
+ * entry animation runs again - the cheapest way to make a static number feel called.
+ */
+.caller__ball {
+  inline-size: 5rem;
+  block-size: 5rem;
+  border-radius: 50%;
+  display: grid;
+  place-content: center;
+  gap: 0;
+  background: radial-gradient(circle at 35% 30%, #fffdf4 0%, var(--silver) 55%, #8d8f88 100%);
+  color: var(--ink);
+  box-shadow: var(--shadow), 0 0 0 3px var(--gold-dim);
+  animation: caller-pop var(--dur) var(--ease-out-back) both;
+}
+
+@keyframes caller-pop {
+  from { transform: scale(0.55) rotate(-12deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+.caller__letter {
+  text-align: center;
+  font-size: var(--text-xs);
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: #6b6d66;
+}
+
+.caller__number {
+  text-align: center;
+  font-size: 1.9rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.caller__idle {
+  min-inline-size: 5rem;
+  display: grid;
+  gap: 2px;
+  color: var(--text-dim);
+}
+
+.caller__idle-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; }
+.caller__idle-value { font-size: 1.9rem; color: var(--gold); line-height: 1; }
+
+.caller__meta {
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  flex: 1 1 10rem;
+  /* Grid and flex items default to min-width:auto, which stops this ever shrinking. */
+  min-inline-size: 0;
+}
+
+.caller__progress {
+  block-size: 4px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 35%);
+  overflow: hidden;
+}
+
+.caller__progress-bar {
+  block-size: 100%;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright));
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform var(--dur) linear;
+}
+
+/* The whole pool, five columns of fifteen, so a player can find their own number. */
+.caller__board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.caller__column {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.caller__column-letter {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--gold-dim);
+}
+
+.caller__cell {
+  padding: 2px 0;
+  text-align: center;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--text-dim) 55%, transparent);
+  background: rgb(0 0 0 / 18%);
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+
+.caller__cell.is-called {
+  color: var(--ink);
+  background: var(--gold-dim);
+  font-weight: 700;
+}
+
+.caller__cell.is-latest {
+  background: var(--gold-bright);
+  box-shadow: var(--glow-gold);
+}
+
+/* -------------------------------------------------------------------- cards -- */
+
+.hall__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+
+.hall__sitting-out {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--text-dim);
+  border: 1px dashed var(--panel-edge);
+  border-radius: var(--radius);
+}
+
+.bcard {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  background: var(--panel);
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+
+.bcard.is-close { border-color: var(--warn); }
+.bcard.is-won { border-color: var(--gold); box-shadow: var(--glow-gold); }
+
+.bcard__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.bcard__label { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.bcard__won { color: var(--gold); font-weight: 700; }
+.bcard__togo { color: var(--warn); }
+
+.bcard__letters,
+.bcard__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+
+.bcard__letters span {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold-dim);
+}
+
+.bcard__cell {
+  aspect-ratio: 1;
+  /* With aspect-ratio, this is what stops a narrow column overflowing its card. */
+  max-inline-size: 100%;
+  display: grid;
+  place-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+}
+
+.bcard__cell.is-free { color: var(--gold-dim); background: rgb(0 0 0 / 25%); }
+
+.bcard__cell.is-marked {
+  background: var(--felt-light);
+  color: var(--text);
+  font-weight: 700;
+  transform: scale(0.94);
+}
+
+.bcard__cell.is-line {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 800;
+  transform: none;
+}
+
+.bcard__why { margin: 0; font-size: var(--text-xs); color: var(--gold-dim); }
+
+/* ------------------------------------------------------------------ buying in -- */
+
+.hall__controls {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.buyin {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.buyin__counts {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.buyin__count {
+  flex: 1 1 5rem;
+  padding: var(--space-2);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast), background var(--dur-fast);
+}
+
+.buyin__count:hover { color: var(--gold); border-color: var(--gold-dim); }
+
+.buyin__count.is-on {
+  background: var(--felt);
+  border-color: var(--gold);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.buyin__stake { display: grid; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-dim); }
+.buyin__stake strong { color: var(--gold); }
+.buyin__stake input { inline-size: 100%; }
+
+.buyin__go { justify-self: stretch; }
+
+.hall__waiting { margin: 0; color: var(--text-dim); text-align: center; }
+.hall__error { margin: 0; color: var(--lose); text-align: center; font-size: var(--text-sm); }
+
+/* ------------------------------------------------------------------ paytable -- */
+
+.btiers {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.btiers caption {
+  caption-side: top;
+  text-align: left;
+  padding-block-end: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.btiers th,
+.btiers td {
+  padding: var(--space-2) var(--space-3);
+  text-align: right;
+  border-block-end: 1px solid var(--panel-edge);
+}
+
+.btiers th:first-child,
+.btiers td:first-child { text-align: left; }
+
+.btiers th { color: var(--text-muted); font-weight: 600; font-size: var(--text-xs); }
+
+.btiers tbody tr.is-here {
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  color: var(--gold-bright);
+}
+
+/* ---------------------------------------------------------------------- log -- */
+
+.hall__log {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.hall__log h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.hall__log ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+
+.hall__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+/* --------------------------------------------------------------------- phone -- */
+
+@media (width <= 34rem) {
+  /* Three columns of the pool rather than five: fifteen numbers stay legible. */
+  .caller__board { grid-template-columns: repeat(3, 1fr); }
+  .caller__number { font-size: 1.5rem; }
+  .caller__ball { inline-size: 4.25rem; block-size: 4.25rem; }
+  .hall__cards { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caller__ball { animation: none; }
+  .caller__progress-bar { transition: none; }
+}

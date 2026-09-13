@@ -33,3 +33,4 @@ export {
 } from './games/wheel/index.js';
 export * as hilo from './games/hilo/index.js';
 export * as towers from './games/towers/index.js';
+export * as bingo from './games/bingo/index.js';
