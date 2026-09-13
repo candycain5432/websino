@@ -535,6 +535,21 @@ currency. Achievements and leaderboards will only ever count online play.
 
 ## How it looks
 
+![The lobby](docs/screenshots/lobby.png)
+
+**The lobby is a floor, not a list.** Every tile shows its game — a real hand of cards, a
+reel window reading 7-7-7, a wheel, a rising curve — because you find the table you want
+by recognising it, not by reading fifteen names. Each preview is built from the same
+tokens as the game it advertises (the blackjack tile is two actual `PlayingCard`s, not a
+picture of cards), so it cannot drift into showing something the game no longer looks
+like, and none of them carry state: a preview is a cover, and a cover that quietly went
+out of date would be worse than none.
+
+The floor is zoned the way a real one is — a card room, the machine floor, and the fast
+games — and the foot of it carries your record: rounds played, lifetime wagered, net and
+peak stack. `net` is measured against everything the house has *given* you rather than a
+fixed opening stack, so a top-up or a daily bonus never reads as profit.
+
 ![The deck](docs/screenshots/deck.png)
 
 Everything is DOM and CSS. Canvas is reserved for the two things that genuinely need
@@ -628,6 +643,7 @@ node tools/shots/offline.mjs      # the single-file build, played from file://
 node tools/shots/online.mjs       # every game against a real server, asserted in the ledger
 node tools/shots/tables.mjs       # two browsers at one shared table
 node tools/shots/bingo.mjs        # two browsers watching one ball sequence
+node tools/shots/stats.mjs        # the lobby's lifetime figures, on both transports
 ```
 
 The interesting tests are the invariants, not the line coverage:
@@ -661,6 +677,11 @@ The interesting tests are the invariants, not the line coverage:
   reusing a class name another screen owns silently inherits its layout. This shipped
   once (`.felt` was roulette's betting grid and the tables screen claimed it too) and is
   now a failing test rather than a confusing screenshot.
+- **Lifetime figures, on both transports** — the lobby's record spans three layers that
+  are implemented twice over, so either side could quietly report zero or count a round
+  twice and nothing else would notice. The two subtle cases are the point: a blackjack
+  hand is *one* round however many times you double, split or insure it, and topping up
+  is not a win.
 - **Card geometry, measured on the real deck** — nothing on a card may escape the card,
   checked across all fifty-two on the `#deck` sheet. It used to build card markup by hand
   inside the browser, and when the component was rewritten that markup stopped matching

@@ -145,6 +145,49 @@ export async function buildServer(db: Db = openDatabase()) {
     };
   });
 
+  /**
+   * Lifetime figures, for the lobby.
+   *
+   * Aggregated from `rounds` - the audit log a round already has to write - rather than
+   * from counters kept alongside it. A counter is a second source of truth that can drift
+   * from the thing it counts, and this is a casino: the number of rounds a player has
+   * staked is exactly the number of rows recording that they did.
+   *
+   * `net` is measured against what the house has *given* rather than against a fixed
+   * starting balance, so a daily bonus or a bailout does not read as profit.
+   */
+  app.get('/api/me/stats', async (request) => {
+    const user = requireUser(request);
+
+    const totals = db
+      .prepare(
+        `SELECT COUNT(*) AS rounds,
+                COALESCE(SUM(bet), 0) AS wagered,
+                COALESCE(SUM(payout), 0) AS returned
+         FROM rounds WHERE user_id = ?`,
+      )
+      .get(user.id) as { rounds: number; wagered: number; returned: number };
+
+    const granted = db
+      .prepare(
+        `SELECT COALESCE(SUM(delta), 0) AS total FROM ledger
+         WHERE user_id = ? AND reason IN ('signup', 'daily_bonus', 'bailout', 'adjustment')`,
+      )
+      .get(user.id) as { total: number };
+
+    const wallet = db
+      .prepare('SELECT chips, peak_chips FROM wallets WHERE user_id = ?')
+      .get(user.id) as { chips: number; peak_chips: number } | undefined;
+
+    return {
+      rounds: totals.rounds,
+      wagered: totals.wagered,
+      returned: totals.returned,
+      net: (wallet?.chips ?? 0) - granted.total,
+      peak: wallet?.peak_chips ?? 0,
+    };
+  });
+
   // ----------------------------------------------------------------- play --
   app.post('/api/round', async (request) => {
     const user = requireUser(request);

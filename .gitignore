@@ -10,5 +10,12 @@ coverage/
 .env.local
 .DS_Store
 
-# Scratch output from tools/shots/*.mjs when run without an output directory.
-shots/
+# Scratch output from `capture.mjs` when run without an output directory: it defaults to
+# `shots/` in the working directory, which is the repo root.
+#
+# Anchored with a leading slash, and that matters. Unanchored, `shots/` matches a `shots`
+# directory at *any* depth - including `tools/shots/`, the harnesses themselves. The four
+# that existed when this rule was written survived only because git ignores nothing it is
+# already tracking; every harness added afterwards was silently dropped, and `bingo.mjs`
+# was documented in the README for a whole release without ever being in the repo.
+/shots/

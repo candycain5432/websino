@@ -1,42 +1,64 @@
+/**
+ * The lobby.
+ *
+ * Zoned rather than gridded: three named rooms, each a row of tiles that *show* their
+ * game. The previous version was one flat `auto-fill` grid of fifteen, which reflowed
+ * neatly and told you nothing - every tile the same weight, every tile read left to right
+ * until you found the name you wanted.
+ */
+
 .lobby {
-  max-inline-size: 1100px;
+  position: relative;
+  max-inline-size: 1160px;
   margin-inline: auto;
-  padding: var(--space-6) var(--space-5) var(--space-8);
+  padding: var(--space-5) var(--space-5) var(--space-8);
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
 }
 
-.lobby__header {
+/*
+ * The house mark behind the floor.
+ *
+ * Four suits, very large, at the edges and at 2.5% - below the threshold where you can
+ * name it and above the one where the page reads as a flat backdrop. It is fixed to the
+ * lobby rather than the viewport so it does not slide under the content while scrolling.
+ */
+.lobby__motif {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lobby__motif-suit {
+  position: absolute;
+  inline-size: 30rem;
+  block-size: 30rem;
+  color: var(--felt-light);
+  opacity: 0.025;
+}
+
+.lobby__motif-suit:nth-child(1) { inset-block-start: -8rem; inset-inline-start: -10rem; rotate: -14deg; }
+.lobby__motif-suit:nth-child(2) { inset-block-start: 18rem; inset-inline-end: -12rem; rotate: 10deg; }
+.lobby__motif-suit:nth-child(3) { inset-block-end: 22rem; inset-inline-start: -11rem; rotate: 8deg; }
+.lobby__motif-suit:nth-child(4) { inset-block-end: -9rem; inset-inline-end: -9rem; rotate: -8deg; }
+
+/* -------------------------------------------------------------------- the bar -- */
+
+.lobby__bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
 }
 
-.lobby__brand { display: flex; align-items: center; gap: var(--space-4); }
-
-.lobby__cards { display: flex; }
-.lobby__cards > :first-child { rotate: -12deg; }
-.lobby__cards > :last-child  { rotate: 8deg; margin-inline-start: -28px; }
-
-.lobby__title {
-  font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  letter-spacing: var(--track-display);
-  /* Leaf rather than a flat top-to-bottom fade: it catches a highlight off-centre. */
-  background: var(--gold-leaf);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.lobby__tagline {
-  margin: 4px 0 0;
-  color: var(--text-dim);
-  font-size: var(--text-sm);
-  letter-spacing: 0.01em;
+.lobby__here {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-muted);
 }
 
 .lobby__wallet { display: flex; align-items: center; gap: var(--space-3); }
@@ -50,7 +72,8 @@
   font-weight: 750;
   letter-spacing: var(--track-tight);
 }
-.lobby__topup { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+
+.lobby__action { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
 
 .lobby__mode {
   padding: 3px var(--space-2);
@@ -61,6 +84,44 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* ------------------------------------------------------------------- the hero -- */
+
+.lobby__hero {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding-block: var(--space-4) var(--space-2);
+  text-align: center;
+}
+
+/* Two cards leaning together above the wordmark, like a sign over a door. */
+.lobby__cards { display: flex; margin-block-end: var(--space-3); }
+.lobby__cards .card { animation: none; }
+.lobby__cards > :first-child { rotate: -12deg; }
+.lobby__cards > :last-child  { rotate: 8deg; margin-inline-start: -28px; }
+
+.lobby__title {
+  font-family: var(--font-display);
+  /* Fluid, because this is the one piece of type on the site that is purely an image. */
+  font-size: clamp(var(--text-2xl), 8vw, 4.2rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: var(--track-display);
+  background: var(--gold-leaf);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* The glow sits behind the letterforms; `background-clip: text` cannot cast one. */
+  filter: drop-shadow(0 0 26px rgb(212 175 55 / 22%));
+}
+
+.lobby__tagline {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--text-base);
+  letter-spacing: 0.02em;
 }
 
 .lobby__notice {
@@ -74,41 +135,62 @@
 }
 .lobby__notice strong { color: var(--warn); }
 
+/* ------------------------------------------------------------------- the rooms -- */
+
+.lobby__room { display: grid; gap: var(--space-3); }
+
+.lobby__room-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  color: var(--gold);
+  /* A rule running off to the right, so a room reads as a heading over a section. */
+  padding-block-end: var(--space-2);
+  border-block-end: 1px solid var(--panel-edge);
+}
+
+.lobby__room-blurb {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
 .lobby__grid {
   margin: 0;
   padding: 0;
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
   gap: var(--space-4);
 }
 
+/* -------------------------------------------------------------------- a tile -- */
+
 /*
- * A game tile.
+ * The accent is committed to an *edge*, not a wash.
  *
- * The first version put a soft radial wash of the game's accent colour across the top of
- * a grey panel. Every accent went through the same 25%-opacity blur onto the same murky
- * ground, so fourteen tiles that were meant to be distinguishable came out as fourteen
- * near-identical brown-grey rectangles - the accent was present in the markup and absent
- * on the screen.
- *
- * What fixes it is committing the accent to an *edge* rather than a *wash*. A saturated
- * hairline along the top of the tile reads at a glance and stays exactly as saturated as
- * it was authored, because nothing is blended into it. The wash stays, much weaker,
- * purely as a bloom under that line.
+ * An earlier version put a soft radial of the game's accent across the top of a grey
+ * panel; every accent went through the same 25%-opacity blur onto the same murky ground,
+ * so fifteen distinguishable games came out as fifteen near-identical brown rectangles.
+ * A saturated hairline reads at a glance and stays exactly as authored.
  */
 .tile {
   position: relative;
   inline-size: 100%;
-  min-block-size: 158px;
   display: grid;
-  align-content: end;
+  align-content: start;
   gap: var(--space-1);
-  padding: var(--space-5) var(--space-4) var(--space-4);
+  padding: var(--space-3) var(--space-4) var(--space-4);
   border: 1px solid var(--panel-edge);
   border-radius: var(--radius-lg);
-  background:
-    linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 55%);
+  background: linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 55%);
   box-shadow: var(--shadow-sm), var(--edge-lit);
   text-align: start;
   overflow: hidden;
@@ -118,7 +200,6 @@
     box-shadow var(--dur);
 }
 
-/* The accent edge. Full strength, one pixel, across the top. */
 .tile::before {
   content: '';
   position: absolute;
@@ -137,7 +218,7 @@
   inset-inline: -10%;
   block-size: 150px;
   background: radial-gradient(ellipse at 50% 100%, var(--tile-accent), transparent 68%);
-  opacity: 0.16;
+  opacity: 0.14;
   transition: opacity var(--dur);
 }
 
@@ -146,10 +227,17 @@
   border-color: color-mix(in srgb, var(--tile-accent) 55%, var(--panel-edge));
   box-shadow: var(--shadow-lg), var(--edge-lit-strong);
 }
-.tile:hover:not(:disabled) .tile__glow { opacity: 0.34; }
+.tile:hover:not(:disabled) .tile__glow { opacity: 0.3; }
 .tile:hover:not(:disabled)::before { opacity: 1; }
+/* The preview leans in when you do. */
+.tile:hover:not(:disabled) .gp { transform: scale(1.05); }
 
 .tile:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
+
+.tile .gp {
+  margin-block-end: var(--space-2);
+  transition: transform var(--dur) var(--ease-out-cubic);
+}
 
 .tile__name {
   font-family: var(--font-display);
@@ -169,7 +257,7 @@
 
 .tile__badge {
   justify-self: start;
-  margin-block-start: var(--space-2);
+  margin-block-start: var(--space-1);
   padding: 3px var(--space-2);
   border: 1px solid color-mix(in srgb, var(--tile-accent) 38%, transparent);
   border-radius: var(--radius-pill);
@@ -182,10 +270,60 @@
 
 .tile--soon { opacity: 0.5; }
 
+/* ------------------------------------------------------------------- the record -- */
+
+.lobby__ledger {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--panel-light), var(--panel));
+  box-shadow: var(--shadow), var(--edge-lit);
+  text-align: center;
+}
+
+.lobby__figure { display: grid; gap: 2px; }
+
+.lobby__figure-value {
+  font-size: var(--text-lg);
+  font-weight: 750;
+  letter-spacing: var(--track-tight);
+  color: var(--text);
+}
+
+.lobby__figure-value.is-win  { color: var(--win); }
+.lobby__figure-value.is-loss { color: var(--lose); }
+
+.lobby__figure-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+.lobby__ledger-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
 .lobby__footer {
   color: var(--text-muted);
   font-size: var(--text-xs);
   text-align: center;
   padding-block-start: var(--space-4);
   border-block-start: 1px solid var(--panel-edge);
+}
+
+/* -------------------------------------------------------------------- narrow -- */
+
+@media (width <= 40rem) {
+  .lobby { padding-inline: var(--space-4); gap: var(--space-5); }
+  .lobby__grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .lobby__motif-suit { inline-size: 18rem; block-size: 18rem; }
+  .tile { padding: var(--space-2) var(--space-3) var(--space-3); }
+  .tile__tagline { font-size: var(--text-xs); }
 }
