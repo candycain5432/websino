@@ -19,11 +19,12 @@ import type { RoundGame } from '@websino/engine';
 
 import type {
   BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, HiLoApi,
-  HiLoGuess, HoldemAction, HoldemApi, MinesApi, PlayRequest, PlayResponse, TowersApi,
+  HiLoGuess, HoldemAction, HoldemApi, MinesApi, PlayerStats, PlayRequest, PlayResponse, TowersApi,
   TowersDifficulty, VideoPokerApi,
 } from './transport.js';
 
 const WALLET_KEY = 'websino.practice.wallet.v1';
+const STATS_KEY = 'websino.practice.stats.v1';
 const FAIR_KEY = 'websino.practice.fair.v1';
 const PRACTICE_STARTING_CHIPS = 10_000;
 
@@ -41,6 +42,25 @@ interface StoredFair {
   clientSeed: string;
   nonce: number;
   previous?: FairnessState['previous'];
+}
+
+/**
+ * Practice mode's own history.
+ *
+ * Separate storage, for the same reason practice chips are a separate wallet: none of it
+ * is ever uploaded, and an account's lifetime figures must not be able to absorb a
+ * number a player could edit in devtools.
+ *
+ * `granted` is everything the house has handed over for free - the opening stack and
+ * every top-up since - so `net` can be measured against it. Without that, pressing
+ * "Top up" would read as winning 10,000 chips.
+ */
+interface StoredStats {
+  rounds: number;
+  wagered: number;
+  returned: number;
+  granted: number;
+  peak: number;
 }
 
 /**
@@ -104,9 +124,13 @@ export class LocalTransport implements GameTransport {
   #balance: number;
   #fair: StoredFair;
   #tables: StoredTables;
+  #stats: StoredStats;
 
   constructor() {
     this.#balance = read<number>(WALLET_KEY, PRACTICE_STARTING_CHIPS);
+    this.#stats = read<StoredStats>(STATS_KEY, {
+      rounds: 0, wagered: 0, returned: 0, granted: PRACTICE_STARTING_CHIPS, peak: this.#balance,
+    });
     this.#fair = read<StoredFair>(FAIR_KEY, {
       serverSeed: randomSeedHex(),
       clientSeed: 'practice',
@@ -127,6 +151,30 @@ export class LocalTransport implements GameTransport {
     write(WALLET_KEY, this.#balance);
     write(FAIR_KEY, this.#fair);
     write(TABLES_KEY, this.#tables);
+    write(STATS_KEY, this.#stats);
+  }
+
+  /**
+   * The only two places practice chips move.
+   *
+   * Every game used to adjust `#balance` itself, at nineteen separate sites, which is
+   * exactly the shape that let pysino mint 4,918 chips - and it also meant there was
+   * nowhere to count from. Funnelling both directions makes the lifetime figures a
+   * property of the wallet rather than nineteen counters that can each be forgotten.
+   *
+   * `round: false` is for a stake added to a hand already in progress - a double, a
+   * split, an insurance bet. They are chips wagered, but they are not another round.
+   */
+  #stake(amount: number, { round = true }: { round?: boolean } = {}): void {
+    this.#balance -= amount;
+    this.#stats.wagered += amount;
+    if (round) this.#stats.rounds += 1;
+  }
+
+  #award(amount: number): void {
+    this.#balance += amount;
+    this.#stats.returned += amount;
+    if (this.#balance > this.#stats.peak) this.#stats.peak = this.#balance;
   }
 
   /** A stream on the current seed, consuming one nonce - exactly as the server does. */
@@ -202,7 +250,7 @@ export class LocalTransport implements GameTransport {
     const round = table?.round;
     if (!table || !round || round.phase !== 'done' || table.settled) return;
     table.settled = true;
-    if (round.returned > 0) this.#balance += round.returned;
+    if (round.returned > 0) this.#award(round.returned);
   }
 
   readonly blackjack: BlackjackApi = {
@@ -224,7 +272,7 @@ export class LocalTransport implements GameTransport {
         throw new Error('finish the hand in progress first');
       }
 
-      this.#balance -= bet;
+      this.#stake(bet);
       table.settled = false;
       table.round = blackjack.deal(table.shoe, bet);
       this.#settleBlackjackIfDone();
@@ -240,7 +288,8 @@ export class LocalTransport implements GameTransport {
       const extra = table.round.staked - before;
       if (extra > 0) {
         if (extra > this.#balance) throw new Error('not enough practice chips');
-        this.#balance -= extra;
+        // A double or a split is more chips on the same hand, not another hand.
+        this.#stake(extra, { round: false });
       }
       this.#settleBlackjackIfDone();
       this.#persist();
@@ -253,7 +302,8 @@ export class LocalTransport implements GameTransport {
       const cost = blackjack.insuranceCost(table.round);
       if (buy && cost > this.#balance) throw new Error('not enough practice chips');
       table.round = blackjack.takeInsurance(table.round, buy);
-      if (buy) this.#balance -= cost;
+      // A side bet on the hand you are already playing.
+      if (buy) this.#stake(cost, { round: false });
       this.#settleBlackjackIfDone();
       this.#persist();
       return this.#blackjackView();
@@ -284,7 +334,7 @@ export class LocalTransport implements GameTransport {
     const table = this.#tables.crash;
     if (!table) throw new Error('no crash round');
     const payout = crash.settle(table.round).payout;
-    if (payout > 0) this.#balance += payout;
+    if (payout > 0) this.#award(payout);
     const view = this.#crashView(true);
     this.#tables.crash = null;
     this.#persist();
@@ -319,7 +369,7 @@ export class LocalTransport implements GameTransport {
       if (bet > this.#balance) throw new Error('not enough practice chips');
 
       const { stream } = this.#takeStream();
-      this.#balance -= bet;
+      this.#stake(bet);
       this.#tables.crash = {
         round: crash.startCrash(bet, stream, autoCashOut),
         startedAt: Date.now(),
@@ -359,7 +409,7 @@ export class LocalTransport implements GameTransport {
   #finishMines(): MinesView {
     const table = this.#tables.mines;
     if (!table) throw new Error('no mines board');
-    this.#balance += mines.currentPayout(table.round);
+    this.#award(mines.currentPayout(table.round));
     const view = this.#minesView();
     this.#tables.mines = null;
     this.#persist();
@@ -376,7 +426,7 @@ export class LocalTransport implements GameTransport {
       if (bet > this.#balance) throw new Error('not enough practice chips');
 
       const { stream, nonce } = this.#takeStream();
-      this.#balance -= bet;
+      this.#stake(bet);
       this.#tables.mines = { round: mines.startMines(bet, mineCount, stream), nonce };
       this.#persist();
       return this.#minesView();
@@ -435,7 +485,7 @@ export class LocalTransport implements GameTransport {
   #finishHiLo(): HiLoView {
     const table = this.#tables.hilo;
     if (!table) throw new Error('no hi-lo run');
-    this.#balance += hilo.currentPayout(table.round);
+    this.#award(hilo.currentPayout(table.round));
     const view = this.#hiloView();
     this.#tables.hilo = null;
     this.#persist();
@@ -452,7 +502,7 @@ export class LocalTransport implements GameTransport {
       if (bet > this.#balance) throw new Error('not enough practice chips');
 
       const { stream, nonce } = this.#takeStream();
-      this.#balance -= bet;
+      this.#stake(bet);
       this.#tables.hilo = { round: hilo.startHiLo(bet, stream), nonce };
       this.#persist();
       return this.#hiloView();
@@ -503,7 +553,7 @@ export class LocalTransport implements GameTransport {
   #finishTowers(): TowersView {
     const table = this.#tables.towers;
     if (!table) throw new Error('no tower');
-    this.#balance += towers.currentPayout(table.round);
+    this.#award(towers.currentPayout(table.round));
     const view = this.#towersView();
     this.#tables.towers = null;
     this.#persist();
@@ -520,7 +570,7 @@ export class LocalTransport implements GameTransport {
       if (bet > this.#balance) throw new Error('not enough practice chips');
 
       const { stream, nonce } = this.#takeStream();
-      this.#balance -= bet;
+      this.#stake(bet);
       this.#tables.towers = { round: towers.startTowers(bet, difficulty, stream), nonce };
       this.#persist();
       return this.#towersView();
@@ -574,7 +624,7 @@ export class LocalTransport implements GameTransport {
       if (bet > this.#balance) throw new Error('not enough practice chips');
 
       const { stream, nonce } = this.#takeStream();
-      this.#balance -= bet;
+      this.#stake(bet);
       this.#tables.videopoker = { round: videopoker.deal(coins, coinValue, stream), nonce };
       this.#persist();
       return this.#videoPokerView();
@@ -584,7 +634,7 @@ export class LocalTransport implements GameTransport {
       const table = this.#tables.videopoker;
       if (!table) throw new Error('no video poker hand in progress');
       table.round = videopoker.drawCards(videopoker.setHolds(table.round, held));
-      this.#balance += table.round.payout;
+      this.#award(table.round.payout);
       const view = this.#videoPokerView();
       this.#tables.videopoker = null;
       this.#persist();
@@ -680,7 +730,7 @@ export class LocalTransport implements GameTransport {
       const { stream, nonce } = this.#takeStream();
       const botSeed = (Date.now() ^ (Math.random() * 0xffffffff)) >>> 0;
       const players = holdem.makeTable(createCasualSource(botSeed), buyIn, 3, 2000);
-      this.#balance -= buyIn;
+      this.#stake(buyIn);
       this.#tables.holdem = {
         table: holdem.createTable(players),
         you: 0,
@@ -724,7 +774,7 @@ export class LocalTransport implements GameTransport {
       if (!entry) throw new Error('no hold em table');
       if (entry.table.handInProgress) throw new Error('finish the hand before you stand up');
       const stack = (entry.table.players[entry.you] as holdem.HoldemPlayer).chips;
-      this.#balance += stack;
+      this.#award(stack);
       this.#tables.holdem = null;
       this.#persist();
       return { balance: this.#balance, cashedOut: stack };
@@ -735,9 +785,24 @@ export class LocalTransport implements GameTransport {
     return this.#balance;
   }
 
+  async getStats(): Promise<PlayerStats> {
+    return {
+      rounds: this.#stats.rounds,
+      wagered: this.#stats.wagered,
+      returned: this.#stats.returned,
+      // Measured against what the house handed over, not against a fixed opening stack,
+      // so topping up never reads as a win.
+      net: this.#balance - this.#stats.granted,
+      peak: Math.max(this.#stats.peak, this.#balance),
+    };
+  }
+
   async topUp(): Promise<number> {
     // Practice chips are worthless by design, so a top-up is free and unlimited.
-    if (this.#balance < PRACTICE_STARTING_CHIPS) this.#balance = PRACTICE_STARTING_CHIPS;
+    if (this.#balance < PRACTICE_STARTING_CHIPS) {
+      this.#stats.granted += PRACTICE_STARTING_CHIPS - this.#balance;
+      this.#balance = PRACTICE_STARTING_CHIPS;
+    }
     this.#persist();
     return this.#balance;
   }
@@ -755,7 +820,8 @@ export class LocalTransport implements GameTransport {
     });
 
     const outcome = game.play(request.config as never, request.bet, stream);
-    this.#balance = this.#balance - request.bet + outcome.payout;
+    this.#stake(request.bet);
+    this.#award(outcome.payout);
 
     const proof = {
       serverSeedHash: commit(this.#fair.serverSeed),

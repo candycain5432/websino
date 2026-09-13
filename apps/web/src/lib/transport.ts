@@ -44,6 +44,25 @@ export interface PlayResponse {
   proof: RoundProof;
 }
 
+/**
+ * What a player has done here, in total.
+ *
+ * Lifetime figures rather than session ones, because the lobby is where you arrive and
+ * the question it should answer is "how have I been doing", not "what happened since I
+ * opened this tab". Both transports implement it: the house aggregates its own audit
+ * log, and practice keeps its own counters - practice chips never reach an account, so
+ * its history must not either.
+ */
+export interface PlayerStats {
+  rounds: number;
+  /** Everything ever staked, not the net of it. */
+  wagered: number;
+  returned: number;
+  /** Chips in hand now minus what the account has ever been given for free. */
+  net: number;
+  peak: number;
+}
+
 export interface FairnessState {
   serverSeedHash: string;
   clientSeed: string;
@@ -121,6 +140,7 @@ export interface HoldemApi {
 export interface GameTransport {
   readonly mode: PlayMode;
   getBalance(): Promise<number>;
+  getStats(): Promise<PlayerStats>;
   play(request: PlayRequest): Promise<PlayResponse>;
   getFairness(): Promise<FairnessState>;
   setClientSeed(clientSeed: string): Promise<FairnessState>;

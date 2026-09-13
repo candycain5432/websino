@@ -13,8 +13,8 @@
 import type {
   BlackjackAction, BlackjackApi, BlackjackView, CrashApi, CrashView,
   FairnessState, GameTransport, HiLoApi, HiLoView, HoldemAction, HoldemApi, HoldemView,
-  MinesApi, MinesView, PlayRequest, PlayResponse, TowersApi, TowersView, VideoPokerApi,
-  VideoPokerView,
+  MinesApi, MinesView, PlayerStats, PlayRequest, PlayResponse, TowersApi, TowersView,
+  VideoPokerApi, VideoPokerView,
 } from './transport.js';
 
 export class ApiError extends Error {
@@ -68,6 +68,10 @@ export class HttpTransport implements GameTransport {
 
   async getBalance(): Promise<number> {
     return (await api.me()).balance;
+  }
+
+  async getStats(): Promise<PlayerStats> {
+    return call<PlayerStats>('/api/me/stats');
   }
 
   async play(request: PlayRequest): Promise<PlayResponse> {
