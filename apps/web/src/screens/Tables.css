@@ -105,15 +105,54 @@
 
 /* ------------------------------------------------------------------- the baize -- */
 
+/*
+ * The same table as the solo games, built the same way.
+ *
+ * This screen does not use `GameShell` - a shared table has none of the shell's shape -
+ * so it does not get the shell's rail for free, and after the felt gained a rail, a
+ * weave and a stitch everywhere else, this was the one green rectangle left in the
+ * building. It is the same three layers on the same tokens, not a second look.
+ */
 .baize {
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: var(--space-5);
-  padding: var(--space-5) var(--space-4);
-  border: 1px solid var(--felt-light);
+  --rail-w: 14px;
+  padding: calc(var(--rail-w) + var(--space-4)) calc(var(--rail-w) + var(--space-3));
+  border-radius: calc(var(--radius-lg) + var(--rail-w));
+  background: var(--rail);
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 2px 1px rgb(255 255 255 / 22%),
+    inset 0 -2px 2px rgb(0 0 0 / 45%);
+}
+
+.baize::before {
+  content: '';
+  position: absolute;
+  inset: var(--rail-w);
+  z-index: -1;
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(ellipse at 50% 40%, var(--felt-light), var(--felt) 55%, var(--felt-dark));
-  box-shadow: var(--shadow-lg);
+    radial-gradient(115% 85% at 50% 0%, transparent 45%, rgb(0 0 0 / 34%) 100%),
+    var(--felt-weave),
+    var(--felt-surface);
+  box-shadow: inset 0 3px 10px rgb(0 0 0 / 55%), inset 0 0 0 1px rgb(0 0 0 / 35%);
+}
+
+.baize::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--rail-w) + 5px);
+  z-index: -1;
+  border-radius: calc(var(--radius-lg) - 4px);
+  border: 1px dashed color-mix(in srgb, var(--gold) 22%, transparent);
+  pointer-events: none;
+}
+
+@media (width <= 34rem) {
+  .baize { --rail-w: 9px; }
 }
 
 .baize__seats {

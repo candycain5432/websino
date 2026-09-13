@@ -21,17 +21,35 @@
 .lobby__cards > :last-child  { rotate: 8deg; margin-inline-start: -28px; }
 
 .lobby__title {
+  font-family: var(--font-display);
   font-size: var(--text-2xl);
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+  /* Leaf rather than a flat top-to-bottom fade: it catches a highlight off-centre. */
+  background: var(--gold-leaf);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-.lobby__tagline { margin: 2px 0 0; color: var(--text-dim); font-size: var(--text-sm); }
+.lobby__tagline {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  letter-spacing: 0.01em;
+}
 
 .lobby__wallet { display: flex; align-items: center; gap: var(--space-3); }
-.lobby__balance { color: var(--gold); font-size: var(--text-xl); font-weight: 700; }
+
+.lobby__balance {
+  background: var(--gold-leaf);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-size: var(--text-xl);
+  font-weight: 750;
+  letter-spacing: var(--track-tight);
+}
 .lobby__topup { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
 
 .lobby__mode {
@@ -65,57 +83,101 @@
   gap: var(--space-4);
 }
 
+/*
+ * A game tile.
+ *
+ * The first version put a soft radial wash of the game's accent colour across the top of
+ * a grey panel. Every accent went through the same 25%-opacity blur onto the same murky
+ * ground, so fourteen tiles that were meant to be distinguishable came out as fourteen
+ * near-identical brown-grey rectangles - the accent was present in the markup and absent
+ * on the screen.
+ *
+ * What fixes it is committing the accent to an *edge* rather than a *wash*. A saturated
+ * hairline along the top of the tile reads at a glance and stays exactly as saturated as
+ * it was authored, because nothing is blended into it. The wash stays, much weaker,
+ * purely as a bloom under that line.
+ */
 .tile {
   position: relative;
   inline-size: 100%;
-  min-block-size: 150px;
+  min-block-size: 158px;
   display: grid;
   align-content: end;
   gap: var(--space-1);
   padding: var(--space-5) var(--space-4) var(--space-4);
   border: 1px solid var(--panel-edge);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--panel-light), var(--panel));
+  background:
+    linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 55%);
+  box-shadow: var(--shadow-sm), var(--edge-lit);
   text-align: start;
   overflow: hidden;
-  transition: transform var(--dur) var(--ease-out-cubic),
-    border-color var(--dur), box-shadow var(--dur);
+  transition:
+    transform var(--dur) var(--ease-out-cubic),
+    border-color var(--dur),
+    box-shadow var(--dur);
+}
+
+/* The accent edge. Full strength, one pixel, across the top. */
+.tile::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 2px;
+  background: linear-gradient(90deg,
+    transparent, var(--tile-accent) 18%, var(--tile-accent) 82%, transparent);
+  opacity: 0.85;
+  transition: opacity var(--dur);
 }
 
 .tile__glow {
   position: absolute;
-  inset-block-start: -40%;
-  inset-inline: -20%;
-  block-size: 120px;
-  background: radial-gradient(ellipse at 50% 100%, var(--tile-accent), transparent 70%);
-  opacity: 0.25;
+  inset-block-start: -70px;
+  inset-inline: -10%;
+  block-size: 150px;
+  background: radial-gradient(ellipse at 50% 100%, var(--tile-accent), transparent 68%);
+  opacity: 0.16;
   transition: opacity var(--dur);
 }
 
 .tile:hover:not(:disabled) {
   transform: translateY(-4px);
-  border-color: var(--tile-accent);
-  box-shadow: var(--shadow-lg);
+  border-color: color-mix(in srgb, var(--tile-accent) 55%, var(--panel-edge));
+  box-shadow: var(--shadow-lg), var(--edge-lit-strong);
 }
-.tile:hover:not(:disabled) .tile__glow { opacity: 0.5; }
+.tile:hover:not(:disabled) .tile__glow { opacity: 0.34; }
+.tile:hover:not(:disabled)::before { opacity: 1; }
 
-.tile__name { font-size: var(--text-lg); font-weight: 700; }
+.tile:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
+
+.tile__name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  color: var(--text);
+}
+
 .tile__tagline {
   color: var(--text-dim);
   font-size: var(--text-sm);
+  line-height: 1.35;
   /* Reserve two lines so tiles line up whether or not the tagline wraps. */
-  min-block-size: 2.6em;
+  min-block-size: 2.7em;
 }
 
 .tile__badge {
   justify-self: start;
   margin-block-start: var(--space-2);
-  padding: 2px var(--space-2);
+  padding: 3px var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--tile-accent) 38%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--tile-accent) 20%, transparent);
+  background: color-mix(in srgb, var(--tile-accent) 14%, transparent);
   color: var(--tile-accent);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .tile--soon { opacity: 0.5; }

@@ -16,10 +16,20 @@
   justify-content: center;
 }
 
+/*
+ * Big enough for its own numbers.
+ *
+ * The wheel has 37 pockets with a number printed in each, so its size is set by the
+ * smallest that stays legible rather than by what fits comfortably - at the old 14rem
+ * cap the numbers were 6px and unreadable, which is most of why it read as decoration.
+ */
 .roulette__wheel {
-  inline-size: clamp(9rem, 26vw, 14rem);
-  block-size: clamp(9rem, 26vw, 14rem);
+  inline-size: clamp(11rem, 30vw, 19rem);
+  block-size: clamp(11rem, 30vw, 19rem);
   max-inline-size: 100%;
+  border-radius: 50%;
+  /* The wheel sits *on* the felt, so it casts onto it. */
+  box-shadow: 0 10px 26px rgb(0 0 0 / 55%), 0 2px 4px rgb(0 0 0 / 40%);
 }
 
 .roulette__readout {
@@ -37,12 +47,27 @@
   text-align: center;
   border-radius: 0.6rem;
   padding: 0.1em 0;
+  box-shadow: var(--shadow), var(--edge-lit);
 }
 
 .roulette__number.is-red   { background: #B22A2A; color: #fff; }
 .roulette__number.is-black { background: #1A1C20; color: #fff; }
 .roulette__number.is-green { background: #1E7A4F; color: #fff; }
-.roulette__number.is-none  { color: var(--text-dim); }
+
+/*
+ * Nothing spun yet.
+ *
+ * This used to be a bare em-dash at 3.4rem with no frame around it, which on the open
+ * felt read as a stray grey bar floating beside the wheel rather than as an empty
+ * readout. Giving the empty state the same footprint as a result - outlined instead of
+ * filled - says "a number goes here" and stops the layout jumping when one arrives.
+ */
+.roulette__number.is-none {
+  color: var(--text-muted);
+  border: 1px dashed var(--panel-edge);
+  background: rgb(0 0 0 / 22%);
+  box-shadow: none;
+}
 
 .roulette__recent {
   display: flex;

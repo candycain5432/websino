@@ -1,77 +1,315 @@
+/**
+ * A playing card.
+ *
+ * Sized from **one** number, `--card-w`, with everything else a fraction of it: the
+ * indices, the pips, the corner radius, the inner rule on a court card. That is what
+ * lets the same component be a 44px hole card at a six-seat table and a 116px card in a
+ * video poker hand without a single hand-tuned exception, and it is why the old version
+ * had a bug that only appeared on tens, and only at the large size.
+ *
+ * The aspect ratio is the real one: a poker card is 2.5 by 3.5 inches, so `--card-h` is
+ * never set independently.
+ */
+
 .card {
   --card-w: 86px;
-  --card-h: 120px;
+  --card-h: calc(var(--card-w) * 1.4);
+  /* The pip field, inset from the edge to leave room for the indices. */
+  --card-pad: calc(var(--card-w) * 0.085);
 
   position: relative;
   inline-size: var(--card-w);
   block-size: var(--card-h);
-  border-radius: calc(var(--card-w) * 0.09);
+  border-radius: calc(var(--card-w) * 0.075);
   perspective: 900px;
   flex: none;
 }
 
-.card--sm { --card-w: 58px;  --card-h: 82px; }
-.card--md { --card-w: 86px;  --card-h: 120px; }
-.card--lg { --card-w: 116px; --card-h: 162px; }
+.card--xs { --card-w: 44px; }
+.card--sm { --card-w: 58px; }
+.card--md { --card-w: 86px; }
+.card--lg { --card-w: 116px; }
+
+/*
+ * Dealt, rather than appearing.
+ *
+ * On the element itself rather than a `.is-dealing` class the games have to set, so every
+ * screen gets it for free and none of them has to own a timer. A card animates when it
+ * mounts, which is exactly when it is dealt - and because seats and hands are keyed, a
+ * card that is merely re-rendered does not remount and does not animate again.
+ *
+ * It is short and it comes from above: 260ms is about as long as a real card is in the
+ * air, and anything slower turns a five-card draw into something you wait for.
+ */
+@keyframes card-deal {
+  from { transform: translateY(-14%) rotate(-4deg) scale(0.94); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+.card { animation: card-deal 260ms var(--ease-out-cubic) both; }
 
 .card__inner {
   position: absolute;
   inset: 0;
-  /*
-   * The corners are positioned, not laid out in a grid. They used to be grid areas
-   * whose columns were sized by their content, so a two-character "10" plus the centre
-   * pip added up to more than the card was wide and the bottom-right corner spilled off
-   * the edge - visible only on tens, and only at the large size.
-   */
   border-radius: inherit;
-  background: var(--card-face);
-  box-shadow: var(--shadow), inset 0 0 0 1px var(--card-edge);
-  transition: transform var(--dur-slow) var(--ease-out-cubic),
+  /*
+   * Not a flat white. A card is a printed, slightly warm stock with a faint sheen
+   * across it, and the difference between `background: #f8f6f0` and this is most of
+   * what stops the face reading as a rectangle of paint.
+   */
+  background:
+    linear-gradient(158deg,
+      color-mix(in srgb, var(--card-face) 96%, #fff) 0%,
+      var(--card-face) 46%,
+      color-mix(in srgb, var(--card-face) 92%, var(--card-edge)) 100%);
+  box-shadow:
+    var(--shadow),
+    inset 0 0 0 1px rgb(255 255 255 / 75%),
+    inset 0 0 0 2px var(--card-edge);
+  transition:
+    transform var(--dur-slow) var(--ease-out-cubic),
     box-shadow var(--dur) var(--ease-out-quad);
   transform-style: preserve-3d;
+  overflow: hidden;
 }
 
 .card--red   { color: var(--card-red); }
 .card--black { color: var(--card-black); }
 
-.card__corner {
+/* ------------------------------------------------------------------- indices -- */
+
+.card__index {
   position: absolute;
   display: grid;
   justify-items: center;
-  line-height: 0.95;
-  font-weight: 700;
-  font-size: calc(var(--card-w) * 0.2);
+  gap: calc(var(--card-w) * 0.008);
+  /*
+   * The index block - rank plus suit - is about 17% of the card's *height*. That figure
+   * is what everything else on the card is fitted around, so it is worth stating: the
+   * first attempt set the rank at 18.5% of the width and the suit under it at 12.5%,
+   * which came to a quarter of the card, and the pip field then started inside it. The
+   * top pips sat beside the index rather than below it and every rank looked cramped.
+   */
+  font-size: calc(var(--card-w) * 0.16);
+  font-weight: 650;
+  line-height: 0.88;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: -0.03em;
 }
 
-.card__corner--tl {
-  inset-block-start: calc(var(--card-w) * 0.07);
-  inset-inline-start: calc(var(--card-w) * 0.07);
+.card__index--tl {
+  inset-block-start: calc(var(--card-w) * 0.055);
+  inset-inline-start: calc(var(--card-w) * 0.06);
 }
 
-.card__corner--br {
-  inset-block-end: calc(var(--card-w) * 0.07);
-  inset-inline-end: calc(var(--card-w) * 0.07);
+.card__index--br {
+  inset-block-end: calc(var(--card-w) * 0.055);
+  inset-inline-end: calc(var(--card-w) * 0.06);
   rotate: 180deg;
 }
 
-.card__suit { font-size: calc(var(--card-w) * 0.17); }
+/* A ten is two glyphs where every other rank is one; squeeze rather than overflow. */
+.card__rank--wide { letter-spacing: -0.09em; }
+
+.card__index-suit {
+  inline-size: calc(var(--card-w) * 0.1);
+  block-size: calc(var(--card-w) * 0.1);
+  display: block;
+}
+
+/* ---------------------------------------------------------------- the pip field -- */
+
+.card__field {
+  position: absolute;
+  /*
+   * Below the index, not beside it.
+   *
+   * 0.055 of padding plus a 0.245 index block is 0.3, so that is where the field can
+   * start - and the same at the bottom, because the card is symmetrical under a half
+   * turn and the bottom index needs exactly the same clearance.
+   */
+  inset-block: calc(var(--card-w) * 0.3);
+  inset-inline: calc(var(--card-w) * 0.18);
+}
 
 .card__pip {
+  position: absolute;
+  display: block;
+  inline-size: calc(var(--card-w) * 0.185);
+  block-size: calc(var(--card-w) * 0.185);
+  /* `left`/`top` are the pip's centre, set inline from the layout table. */
+  translate: -50% -50%;
+}
+
+.card__pip-suit { display: block; inline-size: 100%; block-size: 100%; }
+
+/*
+ * Rotation on the inner glyph, not on the positioned box.
+ *
+ * `translate: -50% -50%` and `rotate: 180deg` on the same element compose in a fixed
+ * order, so rotating the box would spin it about its own top-left and throw the pip
+ * half its width off the lattice - visible only on the ranks with inverted pips.
+ */
+.card__pip--inverted .card__pip-suit { rotate: 180deg; }
+
+/* ---------------------------------------------------------------------- ace -- */
+
+.card__ace {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: calc(var(--card-w) * 0.44);
+}
+
+.card__ace-suit {
+  inline-size: 62%;
+  /*
+   * Sized off the width, not `block-size: 62%`. The field is taller than it is wide, so
+   * a percentage height would make the ace of a tall card fatter than the ace of a
+   * short one - the kind of thing nobody can name but everybody can see.
+   */
+  block-size: auto;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 1px 0 rgb(255 255 255 / 60%));
+}
+
+/* -------------------------------------------------------------------- courts -- */
+
+.card__court {
+  position: absolute;
+  inset: calc(var(--card-w) * -0.02) calc(var(--card-w) * -0.06);
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  align-items: center;
+  border-radius: calc(var(--card-w) * 0.03);
+  /*
+   * A double rule in the suit's own colour, and a plain tinted ground.
+   *
+   * The first version filled this with diagonal hatching, which at any real size reads
+   * as an unfinished placeholder rather than as engraving - the thing it was imitating
+   * is drawn at a far finer pitch than a 55px repeat. A flat wash and a crisp double
+   * rule say "printed panel" with none of that risk.
+   */
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, currentcolor 30%, transparent),
+    inset 0 0 0 calc(var(--card-w) * 0.022) var(--card-face),
+    inset 0 0 0 calc(var(--card-w) * 0.03) color-mix(in srgb, currentcolor 20%, transparent);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, currentcolor 6%, transparent) 0%,
+      color-mix(in srgb, currentcolor 2%, transparent) 50%,
+      color-mix(in srgb, currentcolor 6%, transparent) 100%);
+}
+
+/*
+ * Each half sits toward its own outer edge, not against the rule.
+ *
+ * Centring both halves in their rows was the first attempt, and with a letter as large
+ * as it was the two ended up nose to nose across the middle: a Q above an upside-down Q
+ * reads as one wide glyph rather than as a mirrored pair. Pushing them apart and taking
+ * the size down is what makes the mirroring legible as mirroring.
+ */
+.card__court-half {
+  display: grid;
+  grid-auto-flow: column;
+  gap: calc(var(--card-w) * 0.035);
+  align-self: start;
+  align-items: center;
+  justify-content: center;
+  padding-block-start: calc(var(--card-w) * 0.1);
+}
+
+.card__court-half--inverted {
+  rotate: 180deg;
+  align-self: end;
+}
+
+.card__court-letter {
+  font-family: var(--font-display);
+  font-size: calc(var(--card-w) * 0.26);
+  font-weight: 600;
   line-height: 1;
 }
 
-.card--down .card__inner {
-  background:
-    repeating-linear-gradient(45deg, var(--card-back) 0 6px, var(--card-back-dark) 6px 12px);
-  box-shadow: var(--shadow), inset 0 0 0 3px var(--card-face),
-    inset 0 0 0 4px var(--gold-dim);
+.card__court-suit {
+  inline-size: calc(var(--card-w) * 0.15);
+  block-size: calc(var(--card-w) * 0.15);
 }
 
+.card__court-rule {
+  block-size: 1px;
+  margin-inline: calc(var(--card-w) * 0.06);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, currentcolor 40%, transparent) 22%,
+    color-mix(in srgb, currentcolor 40%, transparent) 78%,
+    transparent
+  );
+}
+
+/* --------------------------------------------------------------------- back -- */
+
+.card--down .card__inner {
+  background:
+    /* A woven lattice rather than the stripes this used to draw. */
+    repeating-linear-gradient(45deg,
+      rgb(255 255 255 / 9%) 0 1px, transparent 1px calc(var(--card-w) * 0.075)),
+    repeating-linear-gradient(-45deg,
+      rgb(255 255 255 / 9%) 0 1px, transparent 1px calc(var(--card-w) * 0.075)),
+    radial-gradient(130% 100% at 50% 0%, var(--card-back) 0%, var(--card-back-dark) 100%);
+  box-shadow:
+    var(--shadow),
+    inset 0 0 0 calc(var(--card-w) * 0.035) var(--card-face),
+    inset 0 0 0 calc(var(--card-w) * 0.045) var(--card-back-dark),
+    inset 0 0 0 calc(var(--card-w) * 0.052) color-mix(in srgb, var(--gold) 65%, transparent);
+}
+
+.card__back {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.card__back-emblem {
+  display: grid;
+  place-items: center;
+  inline-size: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%,
+    color-mix(in srgb, var(--card-back) 80%, #fff) 0%,
+    var(--card-back-dark) 72%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 55%, transparent),
+    inset 0 1px 2px rgb(0 0 0 / 45%);
+}
+
+.card__back-suit {
+  inline-size: 52%;
+  aspect-ratio: 1;
+  color: color-mix(in srgb, var(--gold) 80%, transparent);
+}
+
+/* ------------------------------------------------------------------- states -- */
+
 .card--highlighted .card__inner {
-  box-shadow: var(--shadow-lg), var(--glow-gold), inset 0 0 0 2px var(--gold);
+  box-shadow:
+    var(--shadow-lg),
+    var(--glow-gold),
+    inset 0 0 0 1px rgb(255 255 255 / 75%),
+    inset 0 0 0 3px var(--gold);
+}
+
+/*
+ * Held back rather than removed.
+ *
+ * A folded seat's cards and an unheld video poker card both need to recede without
+ * disappearing - taking them out of the layout would reflow every other card, which is
+ * far more distracting than the thing it was trying to de-emphasise.
+ */
+.card--dimmed .card__inner {
+  filter: saturate(0.45) brightness(0.62);
+  transform: scale(0.965);
 }
