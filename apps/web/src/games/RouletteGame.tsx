@@ -109,54 +109,140 @@ export function RouletteGame({
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, size, size);
 
+    /*
+     * A real wheel, drawn ring by ring from the outside in.
+     *
+     * The first version was 37 pie slices from the centre with a green disc dropped on
+     * top, which is a pie chart wearing a roulette wheel's colours: no rim, no ball
+     * track, no frets between the pockets, no numbers, and a hollow middle. Every one of
+     * those is load-bearing - the numbers most of all, because without them the wheel
+     * carries no information at all and is purely decorative.
+     *
+     * Radii as fractions of the outer edge, which is the whole geometry of the thing:
+     *   1.00-0.88  rim, the turned wooden edge
+     *   0.88-0.79  ball track, where the ball runs before it drops
+     *   0.79-0.50  pockets, with a fret between each
+     *   0.50-0.15  cone, the polished slope down to the middle
+     *   0.15-0     turret
+     */
     const centre = size / 2;
-    const outer = centre - 4;
+    const outer = centre - 2;
     const step = (Math.PI * 2) / WHEEL_ORDER.length;
     // Turn the winning pocket to the top.
     const offset = last ? -last.pocketIndex * step - step / 2 - Math.PI / 2 : -Math.PI / 2;
 
+    const ring = (from: number, to: number, fill: string | CanvasGradient): void => {
+      context.beginPath();
+      context.arc(centre, centre, outer * to, 0, Math.PI * 2);
+      context.arc(centre, centre, outer * from, 0, Math.PI * 2, true);
+      context.fillStyle = fill;
+      context.fill('evenodd');
+    };
+
+    // The rim, lit from the top-left so the whole wheel reads as a solid object.
+    const rim = context.createLinearGradient(0, 0, size, size);
+    rim.addColorStop(0, '#f7e080');
+    rim.addColorStop(0.35, '#a5842f');
+    rim.addColorStop(0.62, '#6b551e');
+    rim.addColorStop(1, '#d4af37');
+    ring(0.88, 1, rim);
+
+    // The ball track: polished, and darker at the bottom where the rim shades it.
+    const track = context.createLinearGradient(0, 0, 0, size);
+    track.addColorStop(0, '#3c2c1c');
+    track.addColorStop(0.5, '#241a10');
+    track.addColorStop(1, '#150f09');
+    ring(0.79, 0.88, track);
+
     WHEEL_ORDER.forEach((number, index) => {
       const start = index * step + offset;
       context.beginPath();
-      context.moveTo(centre, centre);
-      context.arc(centre, centre, outer, start, start + step);
+      context.arc(centre, centre, outer * 0.79, start, start + step);
+      context.arc(centre, centre, outer * 0.5, start + step, start, true);
       context.closePath();
       context.fillStyle =
-        number === 0 ? '#1E7A4F' : RED_NUMBERS.has(number) ? '#B22A2A' : '#1A1C20';
+        number === 0 ? '#1e7a4f' : RED_NUMBERS.has(number) ? '#b22a2a' : '#17191d';
       context.fill();
 
-      if (last && last.number === number) {
-        context.strokeStyle = '#F7E080';
-        context.lineWidth = 2;
-        context.stroke();
-      }
+      // The fret: the metal divider standing between one pocket and the next.
+      context.beginPath();
+      context.moveTo(
+        centre + Math.cos(start) * outer * 0.5,
+        centre + Math.sin(start) * outer * 0.5,
+      );
+      context.lineTo(
+        centre + Math.cos(start) * outer * 0.79,
+        centre + Math.sin(start) * outer * 0.79,
+      );
+      context.strokeStyle = 'rgb(212 175 55 / 55%)';
+      context.lineWidth = Math.max(1, size * 0.004);
+      context.stroke();
+
+      // The number, standing upright out of the middle of its own pocket.
+      context.save();
+      context.translate(centre, centre);
+      context.rotate(start + step / 2 + Math.PI / 2);
+      context.fillStyle = '#f2efe4';
+      /*
+       * Set out near the rim, and small.
+       *
+       * A pocket is a wedge, so the room for a number grows with the radius: at 0.655
+       * the arc between two frets is barely wider than a two-digit number and adjacent
+       * numbers touched. 0.70 buys most of the difference, and dropping the size the
+       * rest of the way keeps 10 through 36 clear of their neighbours.
+       */
+      context.font = `650 ${Math.max(7, Math.round(size * 0.038))}px "Inter Variable", system-ui, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(String(number), 0, -outer * 0.7);
+      context.restore();
     });
 
-    // Rim and hub.
-    context.beginPath();
-    context.arc(centre, centre, outer, 0, Math.PI * 2);
-    context.strokeStyle = '#8A7028';
-    context.lineWidth = 3;
-    context.stroke();
+    // The cone: a polished slope, so the middle is not a flat hole.
+    const cone = context.createRadialGradient(
+      centre - outer * 0.12, centre - outer * 0.16, outer * 0.04,
+      centre, centre, outer * 0.5,
+    );
+    cone.addColorStop(0, '#2b6b52');
+    cone.addColorStop(0.55, '#14442f');
+    cone.addColorStop(1, '#0a2a1d');
+    ring(0, 0.5, cone);
+
+    // The turret, and the winning number printed on it.
+    const turret = context.createLinearGradient(
+      centre - outer * 0.16, centre - outer * 0.16,
+      centre + outer * 0.16, centre + outer * 0.16,
+    );
+    turret.addColorStop(0, '#f7e080');
+    turret.addColorStop(0.5, '#a5842f');
+    turret.addColorStop(1, '#e6c75a');
+    ring(0, last ? 0.2 : 0.13, turret);
 
     context.beginPath();
-    context.arc(centre, centre, outer * 0.42, 0, Math.PI * 2);
-    context.fillStyle = '#0C3627';
-    context.fill();
-    context.strokeStyle = '#8A7028';
-    context.lineWidth = 2;
+    context.arc(centre, centre, outer * 0.5, 0, Math.PI * 2);
+    context.strokeStyle = 'rgb(212 175 55 / 70%)';
+    context.lineWidth = Math.max(1, size * 0.005);
     context.stroke();
 
     if (last) {
-      context.fillStyle = '#EEEADE';
-      context.font = `700 ${Math.round(size * 0.16)}px system-ui, sans-serif`;
+      context.fillStyle = '#1a1305';
+      context.font = `750 ${Math.round(size * 0.1)}px "Inter Variable", system-ui, sans-serif`;
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       context.fillText(String(last.number), centre, centre);
-      // The ball, sitting in the winning pocket at the top.
+
+      // The ball, resting on the track above the winning pocket.
+      const ballAt = centre - outer * 0.835;
+      const ball = context.createRadialGradient(
+        centre - size * 0.008, ballAt - size * 0.008, size * 0.002,
+        centre, ballAt, size * 0.026,
+      );
+      ball.addColorStop(0, '#ffffff');
+      ball.addColorStop(0.6, '#d8d4c6');
+      ball.addColorStop(1, '#8d8a7e');
       context.beginPath();
-      context.arc(centre, centre - outer * 0.78, size * 0.028, 0, Math.PI * 2);
-      context.fillStyle = '#EEEADE';
+      context.arc(centre, ballAt, size * 0.026, 0, Math.PI * 2);
+      context.fillStyle = ball;
       context.fill();
     }
   }, [last]);

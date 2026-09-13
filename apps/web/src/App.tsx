@@ -18,6 +18,7 @@ import { HttpTransport } from './lib/httpTransport.js';
 import { LocalTransport } from './lib/localTransport.js';
 import type { GameTransport } from './lib/transport.js';
 import { BingoHall } from './screens/BingoHall.js';
+import { Deck } from './screens/Deck.js';
 import { Lobby } from './screens/Lobby.js';
 import { SignIn } from './screens/SignIn.js';
 import { Tables } from './screens/Tables.js';
@@ -48,7 +49,28 @@ export function App() {
     OFFLINE_BUILD ? true : readPracticePreference(),
   );
   const [balance, setBalance] = useState(0);
-  const [screen, setScreen] = useState('lobby');
+  /**
+   * `#deck` opens the design sheet.
+   *
+   * A hash rather than a lobby tile: it is a reference page for the deck, not a game.
+   */
+  const [screen, setScreen] = useState(() =>
+    typeof location !== 'undefined' && location.hash === '#deck' ? 'deck' : 'lobby',
+  );
+
+  /*
+   * And it has to keep listening.
+   *
+   * Reading the hash once on mount is not enough: changing only the fragment never
+   * reloads the document, so pasting the link into the address bar of an already-open
+   * tab - or following it from anywhere - left the lobby on screen and looked like the
+   * link was broken.
+   */
+  useEffect(() => {
+    const onHash = (): void => setScreen(location.hash === '#deck' ? 'deck' : 'lobby');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const transport: GameTransport | null =
     practice === null ? null : practice ? local : house;
@@ -70,6 +92,12 @@ export function App() {
   useEffect(() => {
     if (transport) refresh(transport);
   }, [transport, refresh]);
+
+  // Ahead of the sign-in gate: the deck is a reference sheet with no account behind it,
+  // and making a design page require a login would be silly.
+  if (screen === 'deck') {
+    return <Deck onBack={() => { location.hash = ''; setScreen('lobby'); }} />;
+  }
 
   if (!transport) {
     return (

@@ -1,0 +1,47 @@
+/**
+ * The two typefaces, vendored.
+ *
+ * Self-hosted rather than loaded from a CDN, for a reason that is structural rather than
+ * aesthetic: the offline build is a single `.html` file opened from `file://`, and a
+ * webfont request to fonts.gstatic.com from there fails. A bundled font is inlined as a
+ * data URI by `assetsInlineLimit` and works with no network at all.
+ *
+ * Only the **latin** subsets are here, and only the upright variable weights: 48 KB and
+ * 38 KB. Pulling the families in through their npm packages would have brought every
+ * subset - Cyrillic, Greek, Vietnamese - and inlined all of them into the offline file,
+ * which is why the files are checked in instead. Both are SIL Open Font License 1.1;
+ * the licences sit beside them in `src/assets/fonts/`.
+ *
+ * **Playfair Display** carries the identity: a high-contrast Didone whose thin strokes
+ * do at large sizes what gold leaf does on a sign. It is used for the wordmark and for
+ * game titles, and nowhere else - it is a display face and it reads badly small.
+ *
+ * **Inter** does the work: everything you actually have to read, and every number. Its
+ * tabular lining figures are the load-bearing part. A balance that ticks from 1,000 to
+ * 999 must not change width, and a multiplier climbing through 1.98x must not shuffle
+ * sideways on every frame.
+ */
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/inter-latin-variable.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Playfair Display Variable';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('../assets/fonts/playfair-latin-variable.woff2') format('woff2-variations');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

@@ -1,8 +1,22 @@
+/**
+ * The frame every solo game sits in: a masthead, a table, and a control panel.
+ *
+ * The table is the part worth explaining. It used to be a rounded rectangle filled with
+ * a green gradient, which is a perfectly accurate description of felt and reads as a
+ * coloured box. What makes a real table look like an object is not the colour, it is the
+ * **rail**: a raised, turned edge catching light from above, with the playing surface
+ * sunk below it. That is three layers - rail, stitch, felt - and they are built here out
+ * of one element and two pseudo-elements rather than three nested divs, so every game
+ * screen got it without changing a line of its own markup.
+ */
+
 .shell {
   display: flex;
   flex-direction: column;
   min-block-size: 100%;
 }
+
+/* ------------------------------------------------------------------ masthead -- */
 
 .shell__bar {
   display: flex;
@@ -11,6 +25,7 @@
   padding: var(--space-3) var(--space-5);
   background: linear-gradient(180deg, var(--bg-raised), var(--panel));
   border-block-end: 1px solid var(--panel-edge);
+  box-shadow: var(--edge-lit), 0 1px 0 rgb(0 0 0 / 35%);
   position: sticky;
   inset-block-start: 0;
   z-index: 10;
@@ -26,7 +41,15 @@
 .shell__back:hover { color: var(--text); background: var(--panel-light); }
 
 .shell__titles { flex: 1; min-inline-size: 0; }
-.shell__title { font-size: var(--text-lg); }
+
+.shell__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  color: var(--text);
+}
+
 .shell__subtitle {
   margin: 2px 0 0;
   color: var(--text-dim);
@@ -50,10 +73,17 @@
 }
 
 .shell__chips {
-  color: var(--gold);
+  /* Gold leaf rather than gold paint - the balance is the one number that should glint. */
+  background: var(--gold-leaf);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
   font-size: var(--text-xl);
-  font-weight: 700;
+  font-weight: 750;
+  letter-spacing: var(--track-tight);
 }
+
+/* --------------------------------------------------------------------- body -- */
 
 .shell__main {
   flex: 1;
@@ -61,30 +91,76 @@
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: var(--space-5);
   padding: var(--space-5);
-  align-items: start;
+  /*
+   * `stretch`, not `start`.
+   *
+   * With `start` the table was only ever as tall as its contents, so a game with a short
+   * board left a band of empty page beneath it - most of the screen, on blackjack, and
+   * the single thing that made a game look unfinished before anything on it was even
+   * drawn. Stretching lets the felt fill the height it has been given.
+   */
+  align-items: stretch;
 }
 
+/* --------------------------------------------------------------- the table -- */
+
 .shell__board {
+  position: relative;
+  /* So the felt can sit at z-index -1: behind the cards, in front of the rail. */
+  isolation: isolate;
   display: grid;
   place-items: center;
   min-block-size: 420px;
-  padding: var(--space-6);
-  border: 1px solid var(--panel-edge);
+  /* The rail's thickness. Content clears it, and the felt is inset by exactly this. */
+  --rail-w: 14px;
+  padding: calc(var(--rail-w) + var(--space-5));
+  border-radius: calc(var(--radius-lg) + var(--rail-w));
+  background: var(--rail);
+  box-shadow:
+    var(--shadow-lg),
+    /* The rail is turned: lit along the top, dark underneath. */
+    inset 0 2px 1px rgb(255 255 255 / 22%),
+    inset 0 -2px 2px rgb(0 0 0 / 45%);
+}
+
+/* The playing surface: sunk below the rail, woven, and darker at its rim. */
+.shell__board::before {
+  content: '';
+  position: absolute;
+  inset: var(--rail-w);
+  z-index: -1;
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, var(--felt-light), transparent 70%),
-    linear-gradient(180deg, var(--felt), var(--felt-dark));
-  box-shadow: var(--shadow-lg), inset 0 1px 0 rgb(255 255 255 / 6%);
+    radial-gradient(115% 85% at 50% 0%, transparent 45%, rgb(0 0 0 / 34%) 100%),
+    var(--felt-weave),
+    var(--felt-surface);
+  box-shadow:
+    inset 0 3px 10px rgb(0 0 0 / 55%),
+    inset 0 0 0 1px rgb(0 0 0 / 35%);
 }
+
+/* The stitch: the line of thread where felt meets rail. */
+.shell__board::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--rail-w) + 5px);
+  z-index: -1;
+  border-radius: calc(var(--radius-lg) - 4px);
+  border: 1px dashed color-mix(in srgb, var(--gold) 22%, transparent);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------- side panel -- */
 
 .shell__panel {
   display: grid;
   gap: var(--space-4);
+  align-content: start;
   padding: var(--space-4);
   border: 1px solid var(--panel-edge);
   border-radius: var(--radius-lg);
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 38%);
+  box-shadow: var(--shadow), var(--edge-lit);
 }
 
 .shell__topup { inline-size: 100%; }
@@ -94,7 +170,7 @@
   color: var(--text-muted);
   font-size: var(--text-xs);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--track-label);
   text-transform: uppercase;
 }
 
@@ -105,39 +181,74 @@
   justify-content: space-between;
   padding: var(--space-2);
   border-radius: var(--radius-sm);
-  background: var(--bg-deep);
+  background: rgb(0 0 0 / 28%);
+  box-shadow: inset 0 1px 0 rgb(0 0 0 / 30%);
   font-size: var(--text-sm);
 }
 .shell__history-item.is-win  { color: var(--win); }
 .shell__history-item.is-loss { color: var(--text-muted); }
 
-/* Buttons, shared by every game. */
+/* ------------------------------------------------------------------ buttons -- */
+
+/*
+ * Shared by every game.
+ *
+ * A button is a physical key: lit on its top edge, shaded on its bottom, and it goes
+ * *down* when pressed rather than just getting darker. The previous version was a flat
+ * fill with a brightness filter on hover, which is the visual grammar of a link.
+ */
 .btn {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius);
   font-weight: 650;
-  transition: transform var(--dur-fast) var(--ease-out-quad),
-    filter var(--dur), background var(--dur);
+  letter-spacing: var(--track-tight);
+  transition:
+    transform var(--dur-fast) var(--ease-out-quad),
+    box-shadow var(--dur-fast) var(--ease-out-quad),
+    filter var(--dur),
+    background var(--dur);
 }
-.btn:hover:not(:disabled) { filter: brightness(1.12); }
-.btn:active:not(:disabled) { transform: translateY(1px); }
-.btn:disabled { opacity: 0.45; }
+
+.btn:hover:not(:disabled) { filter: brightness(1.1); }
+
+.btn:active:not(:disabled) {
+  transform: translateY(2px);
+  /* The lift goes away as it is pressed, which is what sells the travel. */
+  box-shadow: none;
+}
+
+.btn:disabled { opacity: 0.4; filter: saturate(0.5); }
+
+.btn:focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 2px;
+}
 
 .btn--primary {
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+  background: var(--gold-leaf);
   color: var(--ink);
-  box-shadow: var(--shadow), var(--glow-gold);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 35%);
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--gold-dim) 90%, #000),
+    var(--shadow),
+    var(--glow-gold),
+    var(--edge-lit-strong);
 }
 
 .btn--ghost {
   border: 1px solid var(--panel-edge);
-  background: var(--panel-light);
+  background: linear-gradient(180deg, var(--panel-light), var(--panel));
   color: var(--text);
+  box-shadow: 0 2px 0 rgb(0 0 0 / 35%), var(--edge-lit);
 }
+
+.btn--ghost:hover:not(:disabled) { border-color: var(--gold-dim); }
+
+/* ------------------------------------------------------------------ narrow -- */
 
 @media (max-width: 900px) {
   .shell__main { grid-template-columns: minmax(0, 1fr); }
-  .shell__board { min-block-size: 300px; padding: var(--space-4); }
+  .shell__board { min-block-size: 300px; --rail-w: 10px; padding: calc(var(--rail-w) + var(--space-4)); }
 }
 
 @media (max-width: 620px) {

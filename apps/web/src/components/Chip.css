@@ -1,9 +1,22 @@
 /*
  * A casino chip.
  *
- * pysino drew the six-wedge rim as six polygons every time it rendered one. Here it is
- * a single repeating-conic-gradient, which is sharper, scales to any size, and costs
+ * pysino drew the six-wedge rim as six polygons every time it rendered one. Here it is a
+ * single repeating-conic-gradient, which is sharper, scales to any size, and costs
  * nothing to animate.
+ *
+ * The conic rim was already right; what was missing was that a chip is a *disc with
+ * thickness*. Four things give it that, and none of them is the colour:
+ *
+ *   - a lit top edge and a dark bottom edge, so it reads as a cylinder seen from above
+ *   - an outer shadow cast onto the felt, offset downward
+ *   - a recessed inlay: the printed centre sits slightly below the clay, so it takes an
+ *     inner shadow at the top and a highlight at the bottom - the opposite of the body
+ *   - a hairline ring between the rim and the inlay, which is where a real chip's
+ *     printed label is die-cut
+ *
+ * Together they are the difference between a chip and a coloured circle, which is what
+ * the first version was.
  */
 
 .chip {
@@ -19,33 +32,72 @@
   block-size: var(--chip-size);
   border-radius: 50%;
   background:
+    /* A sheen across the clay, so the rim is not evenly lit all the way round. */
+    linear-gradient(150deg, rgb(255 255 255 / 22%) 0%, transparent 42%, rgb(0 0 0 / 22%) 100%),
     repeating-conic-gradient(
       var(--chip-edge) 0deg 30deg,
       color-mix(in srgb, var(--chip-face) 55%, #fff) 30deg 60deg
     );
-  box-shadow: var(--shadow-sm), inset 0 0 0 1px rgb(0 0 0 / 25%);
-  transition: transform var(--dur) var(--ease-out-back);
+  box-shadow:
+    /* Thickness. */
+    0 2px 0 color-mix(in srgb, var(--chip-edge) 70%, #000),
+    0 3px 6px rgb(0 0 0 / 45%),
+    /* The turned edge. */
+    inset 0 1px 1px rgb(255 255 255 / 35%),
+    inset 0 -2px 2px rgb(0 0 0 / 35%),
+    inset 0 0 0 1px rgb(0 0 0 / 30%);
+  transition:
+    transform var(--dur) var(--ease-out-back),
+    box-shadow var(--dur) var(--ease-out-quad);
   flex: none;
 }
 
 .chip__face {
   display: grid;
   place-items: center;
-  inline-size: 74%;
-  block-size: 74%;
+  inline-size: 70%;
+  block-size: 70%;
   border-radius: 50%;
-  background: var(--chip-face);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--chip-face) 60%, #000);
+  /*
+   * Only lightly shaded.
+   *
+   * The inlay carries the denomination, so it is the one part of a chip that has to stay
+   * legible at 32px. Shading it as hard as the body (down to 88% at the top) took the
+   * 25 and the 500 to the point where the numeral disappeared into its own background -
+   * depth bought at the cost of the only information the chip carries.
+   */
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--chip-face) 94%, #000) 0%,
+      var(--chip-face) 40%,
+      color-mix(in srgb, var(--chip-face) 88%, #fff) 100%);
+  /* Recessed: dark at the top, light at the bottom - the inverse of the body above. */
+  box-shadow:
+    inset 0 2px 3px rgb(0 0 0 / 40%),
+    inset 0 -1px 0 rgb(255 255 255 / 22%),
+    0 0 0 1px color-mix(in srgb, var(--chip-face) 55%, #000),
+    0 0 0 2px rgb(255 255 255 / 12%);
   color: var(--chip-ink);
-  font-size: calc(var(--chip-size) * 0.28);
-  font-weight: 700;
+  font-size: calc(var(--chip-size) * 0.27);
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 35%);
 }
 
+/* A pale chip takes dark ink, so its shadow has to go the other way or it muddies. */
+.chip--1 .chip__face,
+.chip--2500 .chip__face { text-shadow: 0 1px 0 rgb(255 255 255 / 45%); }
+
 .chip--selected {
-  transform: translateY(-6px);
-  box-shadow: var(--shadow), var(--glow-gold), inset 0 0 0 1px rgb(0 0 0 / 25%);
+  transform: translateY(-7px);
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--chip-edge) 70%, #000),
+    0 10px 16px rgb(0 0 0 / 50%),
+    var(--glow-gold),
+    inset 0 1px 1px rgb(255 255 255 / 35%),
+    inset 0 -2px 2px rgb(0 0 0 / 35%),
+    inset 0 0 0 2px var(--gold);
 }
 
 .chip--1    { --chip-face: var(--chip-1);    --chip-edge: var(--chip-1-edge);    --chip-ink: var(--ink); }

@@ -19,8 +19,14 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = new URL('../src/', import.meta.url).pathname;
 
-/** Files whose classes are meant to be shared by everything. */
-const SHARED = ['styles/base.css', 'styles/tokens.css'];
+/**
+ * Files whose classes are meant to be shared by everything.
+ *
+ * `fonts.css` is here for completeness rather than necessity - it is nothing but
+ * `@font-face` rules and claims no class at all - but leaving it out would imply the
+ * stylesheets in `styles/` are screen-scoped, which they are not.
+ */
+const SHARED = ['styles/base.css', 'styles/tokens.css', 'styles/fonts.css'];
 
 function cssFiles(dir: string, prefix = ''): string[] {
   return readdirSync(dir).flatMap((name) => {

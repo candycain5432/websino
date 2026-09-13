@@ -533,6 +533,48 @@ currency. Achievements and leaderboards will only ever count online play.
 
 ---
 
+## How it looks
+
+![The deck](docs/screenshots/deck.png)
+
+Everything is DOM and CSS. Canvas is reserved for the two things that genuinely need
+it — the crash curve and the roulette wheel — because an element can be inspected,
+scaled, animated by the compositor and read aloud by a screen reader, and a bitmap
+cannot.
+
+**Two typefaces, self-hosted.** Playfair Display carries the identity — the wordmark and
+game titles, and nothing else, because a Didone's whole point is the contrast between
+hairline and stem and that turns to mud below about 20px. Inter does everything you
+actually have to read, and every number: its tabular lining figures are load-bearing,
+since a balance ticking from 1,000 to 999 must not change width. Both are bundled rather
+than fetched from a CDN — the offline build is one `.html` file opened from `file://`,
+where a request to fonts.gstatic.com simply fails — and only the latin subsets ship, 86 KB
+for the pair.
+
+**The cards are drawn, not typed.** Suits are SVG paths rather than `♠♥♦♣`, because those
+are font glyphs: their weight and proportion change with whatever is installed, and on
+several Android builds the spade arrives as a colour emoji. A card is the one place where
+the mark *is* the content. Ranks two through ten use the traditional pip lattice — the
+seven hangs its odd pip between the top pair and the middle row rather than spacing
+everything evenly, which is the tell that a deck was drawn rather than generated — and
+every pip below the midline is inverted, so a card is symmetrical under a half turn. That
+is also why the indices are duplicated in opposite corners, and it only works if they are
+small: about 17% of the card's height.
+
+Every measurement on a card is a fraction of one number, its width. That is what lets the
+same component be a 44px hole card at a six-seat table and a 116px card in a video poker
+hand with no hand-tuned exceptions. `#deck` renders all fifty-two on one page — it is a
+design sheet, and it is what the geometry check in the screenshot harness measures.
+
+**Surfaces are materials.** A table is a rail, a stitch and a felt: a turned wooden edge
+lit along one narrow band near the top, a line of thread, and a woven surface sunk below
+it and darker at the rim. Chips are discs with thickness — lit top edge, dark bottom
+edge, and a recessed inlay shaded the *opposite* way, because the printed centre sits
+below the clay. Buttons travel downward when pressed instead of merely getting brighter.
+None of this is new colour; the palette is still the one ported from pysino. It is the
+one-pixel lit edge on every raised surface that was missing, and it is most of what
+separates a dark interface from a set of flat coloured rectangles.
+
 ## How it fits together
 
 ```
@@ -585,6 +627,7 @@ node tools/shots/capture.mjs      # every screen on the local dealer, plus card 
 node tools/shots/offline.mjs      # the single-file build, played from file://
 node tools/shots/online.mjs       # every game against a real server, asserted in the ledger
 node tools/shots/tables.mjs       # two browsers at one shared table
+node tools/shots/bingo.mjs        # two browsers watching one ball sequence
 ```
 
 The interesting tests are the invariants, not the line coverage:
@@ -618,6 +661,12 @@ The interesting tests are the invariants, not the line coverage:
   reusing a class name another screen owns silently inherits its layout. This shipped
   once (`.felt` was roulette's betting grid and the tables screen claimed it too) and is
   now a failing test rather than a confusing screenshot.
+- **Card geometry, measured on the real deck** — nothing on a card may escape the card,
+  checked across all fifty-two on the `#deck` sheet. It used to build card markup by hand
+  inside the browser, and when the component was rewritten that markup stopped matching
+  anything the app renders — so the check went on passing against elements that no longer
+  existed. A check that cannot fail is worse than no check, because it is still on the
+  list.
 
 ---
 
@@ -635,7 +684,8 @@ The interesting tests are the invariants, not the line coverage:
 - [x] Shared tables: several humans at one hold'em table
 - [ ] Shared-table blackjack and roulette
 - [ ] Leaderboards, profiles, achievements, XP and levels
-- [ ] PWA install, sound, animation pass
+- [x] Visual pass — real typefaces, drawn cards, materials instead of flat fills
+- [ ] PWA install, sound, a fuller animation pass
 
 ---
 

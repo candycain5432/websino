@@ -7,43 +7,98 @@
   min-block-size: 100%;
 }
 
+/*
+ * The cabinet.
+ *
+ * A slot machine is a lit glass window in a heavy case, and the first version was a
+ * green panel with fifteen small translucent squares floating on it. Two things carry
+ * the difference: the case is *metal* (a gold bezel over a near-black body, not felt),
+ * and the reel window is **sunk** into it, lit from behind rather than in front.
+ */
 .slots__machine {
   position: relative;
-  padding: clamp(0.6rem, 2vw, 1rem);
-  border-radius: 1rem;
-  background: linear-gradient(160deg, var(--felt-light), var(--felt-dark));
-  border: 2px solid var(--gold-dim);
-  box-shadow: 0 18px 44px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  padding: clamp(0.7rem, 2.2vw, 1.1rem);
+  border-radius: 1.1rem;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--gold) 30%, #1a1a16) 0%,
+      #14140f 12%,
+      #0b0b08 88%,
+      color-mix(in srgb, var(--gold-dim) 30%, #000) 100%);
+  border: 1px solid var(--gold-dim);
+  box-shadow:
+    0 20px 48px rgb(0 0 0 / 55%),
+    var(--edge-lit-strong),
+    inset 0 -2px 3px rgb(0 0 0 / 60%);
   transition: border-color 220ms ease, box-shadow 220ms ease;
 }
 
 .slots__machine.is-bonus {
   border-color: var(--gold-bright);
-  box-shadow: 0 18px 54px rgb(0 0 0 / 0.5), 0 0 0 3px color-mix(in srgb, var(--gold) 35%, transparent);
+  box-shadow:
+    0 20px 54px rgb(0 0 0 / 55%),
+    0 0 0 3px color-mix(in srgb, var(--gold) 40%, transparent),
+    var(--glow-gold);
 }
 
+/* The window: one recessed pane, with the reels separated by their own seams. */
 .slots__grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  gap: 0.35rem;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 0.6rem;
+  background: #07090a;
+  box-shadow:
+    inset 0 3px 10px rgb(0 0 0 / 90%),
+    inset 0 0 0 1px color-mix(in srgb, var(--gold) 22%, transparent),
+    0 1px 0 rgb(255 255 255 / 8%);
 }
 
 .slots__cell {
+  position: relative;
   display: grid;
   place-items: center;
   inline-size: clamp(2.6rem, 11vw, 4.4rem);
   block-size: clamp(2.6rem, 11vw, 4.4rem);
-  border-radius: 0.55rem;
-  background: color-mix(in srgb, var(--bg-deep) 62%, transparent);
-  border: 1px solid color-mix(in srgb, var(--gold) 14%, transparent);
-  font-size: clamp(1.3rem, 5.2vw, 2.2rem);
+  border-radius: 0.35rem;
+  /*
+   * Backlit in the symbol's own colour.
+   *
+   * The symbols are dingbats, so they arrive as whatever weight the fallback font draws
+   * them at - thin, inconsistent outlines that read as stray characters rather than as
+   * designed tokens. A disc of their own colour glowing behind each one is what makes
+   * the reel look printed: the eye reads the coloured field first and the glyph as the
+   * mark on it, which is the opposite of how it was reading before.
+   */
+  background:
+    radial-gradient(circle at 50% 45%,
+      color-mix(in srgb, currentcolor 26%, transparent) 0%,
+      color-mix(in srgb, currentcolor 7%, transparent) 52%,
+      transparent 72%),
+    linear-gradient(180deg, #1b2024 0%, #101417 55%, #0a0d0f 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+  font-size: clamp(1.4rem, 5.4vw, 2.4rem);
   line-height: 1;
   color: var(--text);
-  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+  /* Fattens an outline dingbat just enough to hold its own against the backlight. */
+  text-shadow: 0 0 1px currentcolor, 0 2px 3px rgb(0 0 0 / 70%);
+  transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 /* Each symbol gets its own colour so the grid reads at a glance. */
+/*
+ * Every symbol on every cabinet gets its own colour.
+ *
+ * `currentcolor` is what the cell's backlight is mixed from, so a symbol without an entry
+ * here is not merely uncoloured - it is backlit in plain white, identical to every other
+ * uncoloured symbol on the reel. Only Golden Reels had entries, so the other two cabinets
+ * came out as fifteen interchangeable white tiles: a whole reel of symbols you could not
+ * tell apart, which for a slot machine is the only thing that matters.
+ */
+
+/* Golden Reels - the house classic. */
 .slots__cell--cherry    { color: #E86A7C; }
 .slots__cell--lemon     { color: #D8C14A; }
 .slots__cell--bell      { color: #E0A23A; }
@@ -51,13 +106,38 @@
 .slots__cell--diamond   { color: #59BFE0; }
 .slots__cell--crown     { color: #B58BE0; }
 .slots__cell--seven     { color: var(--lose); font-weight: 800; }
+
+/* Neon Nights - electric, cold, high contrast. */
+.slots__cell--circuit   { color: #3FE0D0; }
+.slots__cell--visor     { color: #FF5FA2; }
+.slots__cell--moto      { color: #FF9A3C; }
+.slots__cell--katana    { color: #9DB8E8; }
+.slots__cell--skyline   { color: #A46CF0; }
+.slots__cell--ace       { color: #F2E9C9; font-weight: 800; }
+
+/* Emerald Rush - jungle greens, with the two top symbols warm so they stand out. */
+.slots__cell--clover    { color: #5FD07A; }
+.slots__cell--fern      { color: #8FBF55; }
+.slots__cell--beetle    { color: #43BFA8; }
+.slots__cell--jade      { color: #B6E3C6; }
+.slots__cell--idol      { color: #E0A23A; }
+.slots__cell--emerald   { color: #2FE08A; }
+
+/* Shared across every cabinet. */
 .slots__cell--wild      { color: var(--gold-bright); font-weight: 800; }
 .slots__cell--scatter   { color: var(--gold); }
 
 .slots__cell.is-lit {
-  background: color-mix(in srgb, var(--gold) 22%, transparent);
-  border-color: var(--gold-bright);
-  transform: scale(1.05);
+  background:
+    radial-gradient(circle at 50% 45%,
+      color-mix(in srgb, var(--gold-bright) 48%, transparent) 0%,
+      color-mix(in srgb, var(--gold) 18%, transparent) 58%,
+      transparent 76%),
+    linear-gradient(180deg, #2a2a1a 0%, #17170f 100%);
+  box-shadow:
+    inset 0 0 0 1px var(--gold-bright),
+    0 0 14px color-mix(in srgb, var(--gold) 45%, transparent);
+  transform: scale(1.04);
 }
 
 .slots__cell.is-spinning {

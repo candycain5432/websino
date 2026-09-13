@@ -279,40 +279,49 @@ await page.waitForTimeout(500);
 await shot('24-holdem-mobile');
 
 /*
- * Geometry check, not a screenshot: every rank's corners must stay inside the card.
- * The corners used to be grid areas sized by their content, so the two-character "10"
- * pushed the bottom-right corner off the edge - a bug no unit test could see and one
- * that only appeared on tens, at the large size, in a real browser.
+ * Geometry check, not a screenshot: nothing on a card may escape the card.
+ *
+ * Measured on `#deck`, the design sheet, which renders all fifty-two through the real
+ * component. It used to build card markup by hand inside the browser instead - and when
+ * the component was rewritten, that markup stopped matching anything the app renders, so
+ * the check went on passing against elements that no longer existed. A check that cannot
+ * fail is worse than no check, because it is still on the list.
+ *
+ * The two-character "10" is what this exists for: the indices used to be grid areas sized
+ * by their content, so a ten pushed the bottom-right index off the edge - a bug no unit
+ * test could see, and one that only appeared on tens, at the large size, in a real browser.
  */
 console.log('card geometry');
-const overflowing = await page.evaluate(() => {
-  const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;inset:0 auto auto 0;display:flex;opacity:0;pointer-events:none';
-  for (const rank of ['2','3','4','5','6','7','8','9','10','J','Q','K','A']) {
-    host.insertAdjacentHTML('beforeend', `
-      <div class="card card--lg card--black"><div class="card__inner">
-        <span class="card__corner card__corner--tl"><span class="card__rank">${rank}</span><span class="card__suit">\u2660</span></span>
-        <span class="card__pip">\u2660</span>
-        <span class="card__corner card__corner--br"><span class="card__rank">${rank}</span><span class="card__suit">\u2660</span></span>
-      </div></div>`);
-  }
-  document.body.appendChild(host);
+await page.goto('http://localhost:4173/#deck', { waitUntil: 'networkidle' });
+await page.waitForSelector('.deck .card', { timeout: 10_000 });
+
+const geometry = await page.evaluate(() => {
   const bad = [];
-  for (const card of host.querySelectorAll('.card')) {
+  const cards = [...document.querySelectorAll('.deck .card')];
+  for (const card of cards) {
     const box = card.getBoundingClientRect();
-    for (const corner of card.querySelectorAll('.card__corner')) {
-      const c = corner.getBoundingClientRect();
-      if (c.left < box.left - 0.5 || c.right > box.right + 0.5 ||
-          c.top < box.top - 0.5 || c.bottom > box.bottom + 0.5) {
-        bad.push(card.querySelector('.card__rank').textContent + (corner.className.includes('br') ? ' (bottom-right)' : ' (top-left)'));
+    const rank = card.getAttribute('aria-label') ?? '?';
+    for (const part of card.querySelectorAll('.card__index, .card__pip, .card__court, .card__ace')) {
+      const p = part.getBoundingClientRect();
+      if (p.left < box.left - 0.5 || p.right > box.right + 0.5 ||
+          p.top < box.top - 0.5 || p.bottom > box.bottom + 0.5) {
+        bad.push(`${rank} (${part.className.split(' ')[0]})`);
       }
     }
   }
-  host.remove();
-  return bad;
+  return { bad, count: cards.length };
 });
-if (overflowing.length) errors.push(`card corners escape the card on: ${overflowing.join(', ')}`);
-else console.log('  every rank fits inside its card');
+
+if (geometry.count < 52) {
+  errors.push(`the deck sheet rendered ${geometry.count} cards, expected at least 52`);
+} else if (geometry.bad.length) {
+  errors.push(`card parts escape the card on: ${[...new Set(geometry.bad)].join(', ')}`);
+} else {
+  console.log(`  nothing escapes its card, across all ${geometry.count}`);
+}
+
+await page.screenshot({ path: `${OUT}/50-deck.png`, fullPage: true });
+console.log('  wrote 50-deck.png');
 
 await browser.close();
 server.close();
