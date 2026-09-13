@@ -19,6 +19,18 @@ body {
     radial-gradient(ellipse 120% 80% at 50% -10%, rgb(34 118 86 / 22%), transparent 60%),
     linear-gradient(180deg, #0d1a15 0%, var(--bg-deep) 55%);
   background-attachment: fixed;
+  /*
+   * A flat colour under the fixed gradients.
+   *
+   * `background-attachment: fixed` paints the gradient over the viewport and nothing
+   * else, and the shorthand above resets background-color to transparent - so any part of
+   * the page the viewport is not currently showing has no background at all. On screen
+   * that is invisible, because the fixed layer follows you down. It stops being invisible
+   * the moment anything renders the whole page at once: a full-page screenshot of the
+   * bingo hall came out dark for the first 1,000 pixels and white for the rest, and
+   * printing does the same thing.
+   */
+  background-color: var(--bg-deep);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

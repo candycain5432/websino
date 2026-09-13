@@ -410,13 +410,22 @@ for (const player of [alice, bob]) {
    */
   const payouts = me.ledger.filter((row) => row.reason === 'payout');
   const wagers = me.ledger.filter((row) => row.reason === 'wager');
+  /*
+   * One buy-in always; a cash-out only if there was a stack to return.
+   *
+   * A player who busts stands up with nothing, and a zero-delta ledger row would be a
+   * record of no chips moving. Requiring a payout row unconditionally was the first
+   * version, and it failed the moment bob went all-in and lost - reporting a ledger bug
+   * where the real event was a hand of poker.
+   */
+  const cashedOut = payouts.reduce((sum, row) => sum + row.delta, 0);
   check(
-    payouts.length === 1 && wagers.length === 1,
-    `${player.label} has exactly one buy-in and one cash-out in the ledger `
+    wagers.length === 1 && payouts.length === (cashedOut > 0 ? 1 : 0),
+    `${player.label} has one buy-in and a cash-out only if the stack survived `
       + `(${wagers.length} wager, ${payouts.length} payout)`,
   );
   check(
-    wallet === before[player.label] - wagers[0].delta * -1 + payouts[0].delta,
+    wallet === before[player.label] + wagers[0].delta + cashedOut,
     `${player.label}'s wallet is exactly the buy-in out and the stack back (${wallet})`,
   );
 }

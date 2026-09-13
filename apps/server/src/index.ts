@@ -23,6 +23,8 @@ import { openDatabase, type Db } from './db/index.js';
 import { auditBalances, getBalance, InsufficientChipsError, recentLedger } from './db/ledger.js';
 import { publicState, rotate, setClientSeed } from './fair/seeds.js';
 import { GAMES, playRound } from './rounds.js';
+import { BingoHall } from './rooms/bingo.js';
+import { registerBingoSocket } from './rooms/bingoSocket.js';
 import { RoomError, RoomRegistry } from './rooms/registry.js';
 import { registerTableSocket } from './rooms/socket.js';
 import {
@@ -54,6 +56,7 @@ export async function buildServer(db: Db = openDatabase()) {
 
   // Shared tables tick on their own clock, so the registry outlives any one request.
   const rooms = new RoomRegistry(db);
+  const bingoHall = new BingoHall(db);
 
   const requireUser = (request: { cookies: Record<string, string | undefined> }) => {
     const user = resolveSession(db, request.cookies[SESSION_COOKIE]);
@@ -346,13 +349,33 @@ export async function buildServer(db: Db = openDatabase()) {
 
   registerTableSocket(app, db, rooms);
 
+  // ------------------------------------------------------------ bingo hall --
+  // The other shape of shared room: no seats, no turn clock, one ball sequence for
+  // everybody. `/ws/bingo` carries the round; this route is for the lobby.
+  app.get('/api/bingo', async () => ({ halls: bingoHall.list() }));
+
+  // The round a player is already in, for a client that reloaded mid-draw - and the
+  // honest place to check redaction, since a payload cannot be talked out of what it
+  // does not contain.
+  app.get('/api/bingo/mine', async (request) =>
+    bingoHall.viewFor('bingo-hall', requireUser(request).id));
+
+  registerBingoSocket(app, db, bingoHall);
+
   // Started here rather than in the registry's constructor so a test can build a server
   // without a background timer running under it.
-  if (process.env.WEBSINO_NO_TICK !== '1') rooms.start();
-  app.addHook('onClose', async () => rooms.stop());
+  if (process.env.WEBSINO_NO_TICK !== '1') {
+    rooms.start();
+    bingoHall.start();
+  }
+  app.addHook('onClose', async () => {
+    rooms.stop();
+    bingoHall.stop();
+  });
 
   // Exposed for tests: driving the clock by hand beats sleeping for twenty seconds.
   (app as unknown as { rooms: RoomRegistry }).rooms = rooms;
+  (app as unknown as { bingoHall: BingoHall }).bingoHall = bingoHall;
 
   return app;
 }

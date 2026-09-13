@@ -29,6 +29,7 @@ export const GAMES: GameCard[] = [
   { id: 'towers',     name: 'Towers',      tagline: 'Climb rows, dodge the traps',    house: 'Edge 1%',    accent: 'var(--win)',    available: true },
   { id: 'wheel',      name: 'Wheel of Fortune', tagline: 'One spin, one segment',      house: 'RTP 99%',    accent: 'var(--gold)',   available: true },
   { id: 'tables',     name: 'Shared tables', tagline: 'Live hold\u2019em with other people', house: 'Multiplayer', accent: 'var(--gold-bright)', available: true, onlineOnly: true },
+  { id: 'bingo',      name: 'Bingo',       tagline: 'One ball sequence, everybody watching', house: 'RTP 99%',    accent: 'var(--silver)', available: true, onlineOnly: true },
 ];
 
 export function Lobby({

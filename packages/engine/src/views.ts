@@ -279,6 +279,86 @@ export interface RoomView {
   balance: number;
 }
 
+/**
+ * One of your bingo cards, as the room reports it.
+ *
+ * Only ever *your* cards. Other players' cards are not in the payload at all - not
+ * redacted, simply not sent - because nothing in the game needs them: the shared part of
+ * a shared round is the ball sequence, and what other people are holding is their
+ * business. The log says when somebody's card came in, which is the social signal that
+ * actually matters.
+ */
+export interface BingoCardView {
+  /** `numbers[row][column]`, `null` in the free centre. */
+  numbers: Array<Array<number | null>>;
+  /** Which squares have been called, as `[row, column]`. */
+  marked: Array<[number, number]>;
+  /** How many more numbers the closest line needs. Zero once a line is in. */
+  toGo: number;
+  /** The ball a line completed on, or null while the card is still waiting. */
+  completedOn: number | null;
+  /** The winning line's squares, for highlighting. */
+  line: Array<[number, number]>;
+  multiplier: number;
+  payout: number;
+}
+
+export interface BingoView {
+  id: string;
+  name: string;
+  phase: 'buying' | 'drawing' | 'results';
+  round: number;
+  /** Epoch ms this phase ends - every client counts down to the same instant. */
+  deadline: number;
+  /**
+   * The balls called so far, in order.
+   *
+   * The rest of the sequence is absent. So is how many balls this round will actually
+   * call: the draw stops early once every card in the round is settled, and saying so in
+   * advance would tell a player the band their own card lands in before the balls arrive.
+   * Same class of secret as a crash point.
+   */
+  called: number[];
+  /** The nominal length of a round - what the paytable's bands are measured against. */
+  ballsDrawn: number;
+  /** Ms between balls, so the client can animate between pushes. */
+  ballMs: number;
+  minStake: number;
+  maxStake: number;
+  maxCards: number;
+  /** The paytable with its exact odds, so the screen shows what it is playing for. */
+  tiers: Array<{ upTo: number; multiplier: number; chance: number }>;
+  /** How many people bought into this round, you included. */
+  players: number;
+  /** Chips staked this round. Not a pool to be divided - the house pays each card. */
+  staked: number;
+  /** Your cards this round; empty if you sat it out. */
+  cards: BingoCardView[];
+  yourStake: number;
+  yourPayout: number;
+  /** So somebody who just walked in can see the room is alive. */
+  lastRound: {
+    round: number;
+    players: number;
+    bestMultiplier: number;
+    bestBall: number | null;
+  } | null;
+  balance: number;
+  canBuy: boolean;
+  log: string[];
+}
+
+export interface BingoSummary {
+  id: string;
+  name: string;
+  phase: 'buying' | 'drawing' | 'results';
+  round: number;
+  players: number;
+  minStake: number;
+  maxStake: number;
+  maxCards: number;
+}
+
 export interface RoomSummary {
   id: string;
   name: string;
