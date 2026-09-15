@@ -1,19 +1,30 @@
 /**
  * The floor.
  *
- * The first version was fifteen identical rectangles carrying a name, a tagline and a
- * badge, in one flat grid. That is a *list* of games, and a list is something you read;
- * nobody reads fifteen items to decide what to play. Three things fix it, and all three
- * are lifted from how a real floor - and pysino's lobby - actually works:
+ * Three rewrites have gone through here and each one removed something. The first was
+ * fifteen identical rectangles carrying a name, a tagline and a badge - a *list* of games,
+ * and nobody reads fifteen items to decide what to play. The second put a picture of each
+ * game on its rectangle, which was the important half of the fix. This one throws the
+ * rectangle away.
  *
- *   **Every tile shows its game.** A hand of cards, a reel window reading 7-7-7, a
- *   wheel, a rising curve. You find what you want by recognising it, not by reading it.
- *   See `GamePreview`.
+ * What is left:
+ *
+ *   **The art is the thing you click.** No border, no panel, no padded box with a
+ *   thumbnail in the top of it: a slab of the game, edge to edge, with its name written
+ *   over the bottom of it. A bordered card with a picture inside reads as a *record* of a
+ *   game; the picture on its own reads as the game.
+ *
+ *   **Every slab moves.** Reels turn, the roulette ball orbits, the crash curve climbs and
+ *   dies, a plinko ball falls. Fifteen still pictures in a grid is a brochure however good
+ *   the pictures are - and a casino floor is the one room in the world that is never
+ *   still. See `GamePreview`, which owns all of it and does it entirely in CSS.
+ *
+ *   **They are not all the same size.** One game per room is given a double-width slab.
+ *   A grid of equal cells has no focus and nothing to look at first, which is most of what
+ *   made the old one feel like a settings page.
  *
  *   **The floor is zoned.** A casino does not shuffle its roulette wheels in among its
- *   slot machines; it has a card room and a machine floor. Fifteen games in one
- *   undifferentiated grid is the same mistake, and splitting them into three named rooms
- *   costs nothing and makes the page scannable.
+ *   slot machines; it has a card room and a machine floor.
  *
  *   **The house tells you how you are doing.** Rounds played, lifetime wagered, net and
  *   peak stack across the foot. The lobby is where you arrive and where you come back
@@ -23,7 +34,6 @@
 import { useEffect, useState } from 'react';
 
 import { GamePreview } from '../components/GamePreview.js';
-import { PlayingCard } from '../components/PlayingCard.js';
 import { SuitGlyph, type SuitName } from '../components/SuitGlyph.js';
 import { formatChips } from '../lib/format.js';
 import type { GameTransport, PlayerStats } from '../lib/transport.js';
@@ -40,23 +50,25 @@ export interface GameCard {
   room: 'cards' | 'floor' | 'fast';
   /** Needs a server and other people, so practice mode cannot offer it. */
   onlineOnly?: boolean;
+  /** Given the double-width slab in its room. One per room, or the emphasis is worth nothing. */
+  feature?: boolean;
 }
 
 export const GAMES: GameCard[] = [
   // The card room: everything dealt from a deck.
-  { id: 'blackjack',  name: 'Blackjack',   tagline: 'Six decks, dealer stands soft 17', house: 'Edge 0.5%', accent: 'var(--win)',    available: true, room: 'cards' },
+  { id: 'blackjack',  name: 'Blackjack',   tagline: 'Six decks, dealer stands soft 17', house: 'Edge 0.5%', accent: 'var(--win)',    available: true, room: 'cards', feature: true },
   { id: 'holdem',     name: "Texas Hold'em", tagline: 'No-limit against Monte Carlo bots', house: 'You vs bots', accent: 'var(--purple)', available: true, room: 'cards' },
   { id: 'tables',     name: 'Shared tables', tagline: 'Live hold’em with other people', house: 'Multiplayer', accent: 'var(--gold-bright)', available: true, room: 'cards', onlineOnly: true },
   { id: 'videopoker', name: 'Jacks or Better', tagline: 'Full-pay 9/6 video poker',     house: 'RTP 99.5%',  accent: 'var(--push)',   available: true, room: 'cards' },
 
   // The main floor: the machines and the big shared draws.
   { id: 'roulette',   name: 'Roulette',    tagline: 'Single zero, the whole felt',      house: 'Edge 2.7%',  accent: 'var(--lose)',   available: true, room: 'floor' },
-  { id: 'slots',      name: 'Slots',       tagline: 'Three cabinets, wilds, free spins', house: 'RTP 94.7%',  accent: 'var(--gold)',   available: true, room: 'floor' },
+  { id: 'slots',      name: 'Slots',       tagline: 'Three cabinets, wilds, free spins', house: 'RTP 94.7%',  accent: 'var(--gold)',   available: true, room: 'floor', feature: true },
   { id: 'wheel',      name: 'Wheel of Fortune', tagline: 'One spin, one segment',      house: 'RTP 99%',    accent: 'var(--gold)',   available: true, room: 'floor' },
   { id: 'bingo',      name: 'Bingo',       tagline: 'One ball sequence, everybody watching', house: 'RTP 99%',    accent: 'var(--silver)', available: true, room: 'floor', onlineOnly: true },
 
   // Fast games: one decision, settled in seconds.
-  { id: 'crash',      name: 'Crash',       tagline: 'Cash out before the curve dies', house: 'Edge 1%',    accent: 'var(--warn)',   available: true, room: 'fast' },
+  { id: 'crash',      name: 'Crash',       tagline: 'Cash out before the curve dies', house: 'Edge 1%',    accent: 'var(--warn)',   available: true, room: 'fast', feature: true },
   { id: 'mines',      name: 'Mines',       tagline: 'Find gems, cash out before a bomb', house: 'Edge 1%',    accent: 'var(--info)',   available: true, room: 'fast' },
   { id: 'plinko',     name: 'Plinko',      tagline: 'Drop a ball, take the bucket',   house: 'RTP 99%',    accent: 'var(--warn)',   available: true, room: 'fast' },
   { id: 'towers',     name: 'Towers',      tagline: 'Climb rows, dodge the traps',    house: 'Edge 1%',    accent: 'var(--win)',    available: true, room: 'fast' },
@@ -131,10 +143,16 @@ export function Lobby({
       </header>
 
       <div className="lobby__hero">
-        <div className="lobby__cards" aria-hidden="true">
-          <PlayingCard card={51} size="sm" />
-          <PlayingCard card={48} size="sm" />
-        </div>
+        {/*
+          * The wordmark, and nothing propped up next to it.
+          *
+          * Two playing cards used to lean over the top of it as a sign over a door. They
+          * were the only still, unlit, un-animated object left on the page once the floor
+          * below them came alive, and at that point they stopped reading as a sign and
+          * started reading as clip art. The name itself carries the gold now - a sweep
+          * runs across the letterforms every few seconds, which is the same trick a lit
+          * casino sign uses and costs one keyframe.
+          */}
         <h1 className="lobby__title">Websino</h1>
         <p className="lobby__tagline">One chip stack. Every table. Provably fair.</p>
       </div>
@@ -153,25 +171,42 @@ export function Lobby({
             <span className="lobby__room-blurb">{room.blurb}</span>
           </h2>
 
-          <ul className="lobby__grid">
+          <ul className="lobby__floor">
             {GAMES.filter((game) => game.room === room.id).map((game) => {
               // A shared game needs a server and other people, so practice offers it
               // greyed out and says why rather than pretending it is missing.
               const offline = game.onlineOnly === true && practice;
               const playable = game.available && !offline;
               return (
-                <li key={game.id}>
+                <li key={game.id} className={game.feature ? 'lobby__floor-wide' : ''}>
                   <button
-                    className={`tile${playable ? '' : ' tile--soon'}`}
+                    className={[
+                      'slab',
+                      game.feature ? 'slab--wide' : '',
+                      playable ? '' : 'is-shut',
+                    ].filter(Boolean).join(' ')}
                     style={{ '--tile-accent': game.accent } as React.CSSProperties}
                     onClick={() => playable && onOpen(game.id)}
                     disabled={!playable}
                   >
-                    <span className="tile__glow" aria-hidden="true" />
                     <GamePreview game={game.id} />
-                    <span className="tile__name">{game.name}</span>
-                    <span className="tile__tagline">{game.tagline}</span>
-                    <span className="tile__badge">
+                    {/* Dark enough under the type to read on, invisible above it. */}
+                    <span className="slab__scrim" aria-hidden="true" />
+                    {/*
+                      * The name comes first in the DOM although it is drawn last.
+                      *
+                      * A button's accessible name is its contents in source order, so
+                      * putting the badge above it made every game announce itself as
+                      * "RTP 94.7%, Slots, three cabinets" - which is the wrong word first
+                      * for a screen reader and, more bluntly, broke every selector that
+                      * finds a game by its name. Both are placed absolutely, so the order
+                      * here costs nothing on screen.
+                      */}
+                    <span className="slab__label">
+                      <span className="slab__name">{game.name}</span>
+                      <span className="slab__line">{game.tagline}</span>
+                    </span>
+                    <span className="slab__badge">
                       {offline ? 'Sign in to play' : game.available ? game.house : 'Coming soon'}
                     </span>
                   </button>

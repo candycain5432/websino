@@ -43,6 +43,25 @@ const shot = async (name) => {
   console.log(`  wrote ${name}.png`);
 };
 
+/**
+ * Wait for a control to come back, rather than for a number of milliseconds.
+ *
+ * These used to be hardcoded pauses, and the moment the games grew real animations every
+ * one of them was too short: the documented roulette screenshot came out with the ball
+ * still in the air and the readout showing an ellipsis. A hardcoded pause is a guess at
+ * how long something takes, and it goes stale silently the next time that changes - so
+ * this asks the thing itself. A spinning machine disables its own button; a settled one
+ * does not.
+ */
+const settled = async (locator, timeout = 20_000) => {
+  const until = Date.now() + timeout;
+  while (Date.now() < until) {
+    if (await locator.isEnabled()) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`${locator} never settled`);
+};
+
 await page.goto('http://localhost:4173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(400);
 console.log('sign in'); await shot('00-signin');
@@ -80,8 +99,9 @@ await page.getByRole('button', { name: /lobby/i }).click();
 await page.waitForTimeout(300);
 await page.getByRole('button', { name: /^Slots\b/ }).first().click();
 await page.waitForTimeout(300);
-await page.getByRole('button', { name: 'Spin', exact: true }).click();
-await page.waitForTimeout(900);
+const spinReels = page.getByRole('button', { name: 'Spin', exact: true });
+await spinReels.click();
+await settled(spinReels);
 await shot('06-slots');
 
 console.log('blackjack');
@@ -136,8 +156,9 @@ for (const label of [/^Red$/, /^25–36$/]) {
   if (await spot.count()) await spot.first().click();
 }
 await shot('14-roulette-bets');
-await page.getByRole('button', { name: 'Spin', exact: true }).click();
-await page.waitForTimeout(800);
+const spinWheel = page.getByRole('button', { name: 'Spin', exact: true });
+await spinWheel.click();
+await settled(spinWheel);
 await shot('15-roulette');
 
 console.log('mines');
@@ -196,8 +217,9 @@ await page.waitForTimeout(300);
 await page.getByRole('button', { name: /Wheel of Fortune/ }).first().click();
 await page.locator('.wof__wheel').waitFor({ timeout: 10_000 });
 await shot('27-wheel');
-await page.getByRole('button', { name: /^Spin for/ }).click();
-await page.waitForTimeout(3_200);
+const spinWof = page.getByRole('button', { name: /^Spin for/ });
+await spinWof.click();
+await settled(spinWof);
 await shot('28-wheel-settled');
 
 console.log('hi-lo');

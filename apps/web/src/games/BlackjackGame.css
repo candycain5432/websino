@@ -132,6 +132,7 @@
   font-size: clamp(1.4rem, 5vw, 2.2rem);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  animation: settle-in 340ms var(--ease-out-back) both;
 }
 
 .bj__banner.is-win { color: var(--win); }

@@ -41,6 +41,23 @@ h1, h2, h3, h4 {
   letter-spacing: -0.015em;
 }
 
+/*
+ * A list that carries a class is a component, not prose.
+ *
+ * Eleven stylesheets had already written this rule out by hand, and the three that had
+ * not - the recent-numbers strip on roulette, the crash-point strip, the settled bets -
+ * were each rendering a bullet next to a pill. `display: flex` on the container is not
+ * enough: Chrome still draws a marker for a flex item that is a `list-item`, which is why
+ * it kept slipping through. An unclassed `<ul>` is left alone, because that one really is
+ * prose and really does want its markers.
+ */
+ul[class],
+ol[class] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 button {
   font: inherit;
   color: inherit;
@@ -124,6 +141,24 @@ input {
 }
 
 /*
+ * A result landing.
+ *
+ * Every game ends a round by putting a figure on the table - a net, a multiplier, a hand
+ * value - and until now every one of them simply *appeared*, in the same frame the cards
+ * stopped moving. The figure is the answer to the question the whole round asked, so it
+ * should arrive with some weight behind it: a fast overshoot and a settle, about a third
+ * of a second.
+ *
+ * Declared here because eight games use it and a keyframe used across files but declared
+ * in one of them is a dependency nothing enforces.
+ */
+@keyframes settle-in {
+  0%   { transform: scale(0.72) translateY(10px); opacity: 0; }
+  55%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+/*
  * Whose turn it is.
  *
  * Used by a hold'em seat on the clock, a shared-table seat on the clock, and the
@@ -134,4 +169,18 @@ input {
 @keyframes turn-waiting {
   0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 34%, transparent), var(--shadow); }
   50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 16%, transparent), var(--shadow-lg), var(--glow-gold); }
+}
+
+/*
+ * One switch for everything that only moves for effect.
+ *
+ * Each screen still turns off its own motion in its own stylesheet - that is where the
+ * decision about what a *still* version of it should look like belongs. This covers the
+ * shared keyframes declared above, which have no single owner to turn them off.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .bj__banner,
+  .dice__roll,
+  .mines__readout,
+  .vp__result { animation: none; }
 }

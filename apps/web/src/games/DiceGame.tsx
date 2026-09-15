@@ -73,7 +73,11 @@ export function DiceGame({
       onTopUp={transport.topUp ? () => void transport.topUp?.().then(onBalance) : undefined}
       board={
         <div className="dice">
-          <output className={`dice__roll${last ? (last.won ? ' is-win' : ' is-loss') : ''}`}>
+          {/* Re-keyed per roll, so the same number twice still arrives twice. */}
+          <output
+            key={history[0]?.id ?? 'idle'}
+            className={`dice__roll${last ? (last.won ? ' is-win' : ' is-loss') : ''}`}
+          >
             <span className="numeric">{last ? formatHundredths(last.roll) : '--.--'}</span>
           </output>
 

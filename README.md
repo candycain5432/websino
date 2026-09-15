@@ -605,18 +605,45 @@ currency. Achievements and leaderboards will only ever count online play.
 
 ![The lobby](docs/screenshots/lobby.png)
 
-**The lobby is a floor, not a list.** Every tile shows its game — a real hand of cards, a
-reel window reading 7-7-7, a wheel, a rising curve — because you find the table you want
-by recognising it, not by reading fifteen names. Each preview is built from the same
-tokens as the game it advertises (the blackjack tile is two actual `PlayingCard`s, not a
-picture of cards), so it cannot drift into showing something the game no longer looks
-like, and none of them carry state: a preview is a cover, and a cover that quietly went
-out of date would be worse than none.
+**The lobby is a floor, not a list.** There is no tile and no border: each game is a slab
+of its own art, edge to edge, with its name written over the bottom — because you find the
+table you want by recognising it, not by reading fifteen names, and a bordered card with a
+thumbnail inside reads as a *record* of a game rather than as the game. One per room gets
+double the width, since a grid of equal cells has nothing to look at first.
+
+**And all fifteen of them move.** Reels turn, the roulette ball orbits, the crash curve
+climbs and dies, a plinko ball falls. Fifteen still pictures is a brochure however good the
+pictures are, and a casino floor is the one room in the world that is never still. It is
+all CSS transforms and opacity, so the whole floor animating costs about what one of them
+costs and none of it can make the page stutter while you scroll.
+
+Each scene is built from the same tokens as the game it advertises — the blackjack slab is
+two actual `PlayingCard`s and the slots slab runs the golden cabinet's own symbols, not
+pictures of them — so a preview cannot drift into showing something the game no longer
+looks like. None of them carry state: the motion is a loop, never a live round. A preview
+is a cover, and a cover that quietly went out of date would be worse than none.
 
 The floor is zoned the way a real one is — a card room, the machine floor, and the fast
 games — and the foot of it carries your record: rounds played, lifetime wagered, net and
 peak stack. `net` is measured against everything the house has *given* you rather than a
 fixed opening stack, so a top-up or a daily bonus never reads as profit.
+
+![Roulette](docs/screenshots/roulette.png)
+
+**Nothing settles instantly.** The reels spin down one at a time, left to right, over
+twenty symbols of travel and an easing curve that brakes late so the last few go past slowly
+enough to read. The roulette wheel turns for four and a half seconds while the ball runs the
+other way round the track, falls down the cone with two shrinking bounces and rides its
+pocket to a stop. The crash curve is ruled in multipliers, carries a lit head, and when it
+dies the chart is knocked sideways and the head blows apart.
+
+All of that is presentation over an outcome the server had already chosen before the first
+frame. The rotation is computed *backwards* from the winning pocket; a reel's landing
+position is the three symbols the round already decided, sitting at the end of the strip.
+There is no path through any of it that could come to rest somewhere other than the answer.
+What the animation does control is the one thing it should: everything that would give the
+result away — the number, the lit spots on the felt, the payout, the win celebration — waits
+for the thing that decides it to stop moving.
 
 ![The deck](docs/screenshots/deck.png)
 

@@ -1,0 +1,80 @@
+/**
+ * The win burst.
+ *
+ * Absolutely positioned over the middle of the table and untouchable, so it can never
+ * take a click meant for a card or a button - a celebration that eats the next bet would
+ * be worse than no celebration.
+ */
+
+.burst {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  inline-size: 0;
+  block-size: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/*
+ * One piece, on an arc.
+ *
+ * `--x` and `--y` are where it ends up horizontally and at the top of its flight; the
+ * `+ 150px` at the end is gravity taking it the rest of the way down. Doing the whole
+ * throw in one `transform` keeps each piece on the compositor - forty-six of these run
+ * together and none of them touch layout.
+ */
+.burst__bit {
+  position: absolute;
+  inline-size: 11px;
+  block-size: 11px;
+  margin: -5px;
+  animation: burst-fly 1.25s cubic-bezier(0.18, 0.62, 0.36, 1) both;
+}
+
+@keyframes burst-fly {
+  0%   { transform: translate(0, 0) scale(0.35) rotate(0deg); opacity: 0; }
+  9%   { opacity: 1; }
+  48%  {
+    transform: translate(calc(var(--x) * 0.66), calc(var(--y) * 0.66 - 22px))
+               scale(1) rotate(calc(var(--spin) * 0.45));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--x), calc(var(--y) + 150px))
+               scale(0.8) rotate(var(--spin));
+    opacity: 0;
+  }
+}
+
+/* A chip on edge, a gold coin, and a shard of confetti - the three things that fly. */
+.burst__bit--0 {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, var(--gold-bright), var(--gold) 58%, var(--gold-dim));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 65%, transparent);
+}
+
+.burst__bit--1 {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff, var(--win) 62%, #2f7a45);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--win) 55%, transparent);
+}
+
+.burst__bit--2 {
+  inline-size: 6px;
+  block-size: 13px;
+  border-radius: 1px;
+  background: var(--gold-bright);
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Off entirely rather than slowed down.
+   *
+   * There is no still version of confetti: a burst that does not move is a scattering of
+   * dots sitting on the table, which is worse than nothing. The win is already said in
+   * words and in the balance, so removing this removes decoration and no information.
+   */
+  .burst { display: none; }
+}
