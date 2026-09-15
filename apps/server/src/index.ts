@@ -25,6 +25,8 @@ import {
 
 import { AuthError, SESSION_COOKIE, createSession, destroySession, login, register, resolveSession } from './auth/index.js';
 import { openDatabase, type Db } from './db/index.js';
+// TEMPORARY: developer chip grant. See apps/server/src/dev/cheats.ts to remove.
+import { registerDevCheats } from './dev/cheats.js';
 import { auditBalances, getBalance, InsufficientChipsError, recentLedger } from './db/ledger.js';
 import { publicState, rotate, setClientSeed } from './fair/seeds.js';
 import { GAMES, playRound } from './rounds.js';
@@ -492,6 +494,9 @@ export async function buildServer(db: Db = openDatabase()) {
     bingoHall.viewFor('bingo-hall', requireUser(request).id));
 
   registerBingoSocket(app, db, bingoHall);
+
+  // TEMPORARY: developer chip grant. No-op unless WEBSINO_DEV_CHEATS=1.
+  registerDevCheats(app, db);
 
   await serveClient(app);
 

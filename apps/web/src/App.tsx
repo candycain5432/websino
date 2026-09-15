@@ -15,6 +15,8 @@ import { SlotsGame } from './games/SlotsGame.js';
 import { WheelGame } from './games/WheelGame.js';
 import { api } from './lib/httpTransport.js';
 import { HttpTransport } from './lib/httpTransport.js';
+// TEMPORARY: developer chip grant. See apps/web/src/lib/devCheats.ts to remove.
+import { installDevCheats } from './lib/devCheats.js';
 import { LocalTransport } from './lib/localTransport.js';
 import type { GameTransport } from './lib/transport.js';
 import { BingoHall } from './screens/BingoHall.js';
@@ -92,6 +94,15 @@ export function App() {
   useEffect(() => {
     if (transport) refresh(transport);
   }, [transport, refresh]);
+
+  /*
+   * TEMPORARY: the developer chip grant. Delete this block and its import to remove it,
+   * along with apps/web/src/lib/devCheats.ts and apps/server/src/dev/cheats.ts.
+   */
+  useEffect(() => {
+    if (!transport) return;
+    installDevCheats({ onBalance: setBalance, practice: transport.mode === 'practice' });
+  }, [transport]);
 
   // Ahead of the sign-in gate: the deck is a reference sheet with no account behind it,
   // and making a design page require a login would be silly.

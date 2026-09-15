@@ -160,13 +160,28 @@ export function BlackjackGame({
       board={
         <div className="bj">
           <div className="bj__side">
-            <span className="bj__side-label">Dealer</span>
+            <span className="bj__side-label">
+              Dealer
+              {/*
+                * The dealer has no turn to announce - it plays out server-side and the
+                * whole hand comes back at once - so the only honest thing to say is
+                * whether the hole card is still down. Its draws read as draws because
+                * they animate in one after another; see `dealIndex`.
+                */}
+              {view?.holeHidden && <span className="bj__turn is-waiting">hole card down</span>}
+            </span>
             <div className="bj__cards">
               {dealerCards.length === 0 ? (
                 <PlayingCard faceUp={false} size="lg" />
               ) : (
                 dealerCards.map((card, i) => (
-                  <PlayingCard key={i} card={card} faceUp={card !== undefined} size="lg" />
+                  <PlayingCard
+                    key={i}
+                    card={card}
+                    faceUp={card !== undefined}
+                    size="lg"
+                    dealIndex={i}
+                  />
                 ))
               )}
             </div>
@@ -179,6 +194,8 @@ export function BlackjackGame({
             <span className="bj__side-label">
               You
               {view && view.hands.length > 1 && ` · ${view.hands.length} hands`}
+              {view?.phase === 'player' && <span className="bj__turn">your move</span>}
+              {view?.phase === 'insurance' && <span className="bj__turn">insurance?</span>}
             </span>
             <div className="bj__hands">
               {(view?.hands ?? []).map((hand, index) => (
@@ -186,13 +203,13 @@ export function BlackjackGame({
                   key={index}
                   className={[
                     'bj__hand',
-                    view && view.phase === 'player' && view.activeIndex === index ? 'is-active' : '',
+                    view && view.phase !== 'done' && view.activeIndex === index ? 'is-active' : '',
                     hand.outcome ? `is-${hand.outcome}` : '',
                   ].filter(Boolean).join(' ')}
                 >
                   <div className="bj__cards">
                     {hand.cards.map((card, i) => (
-                      <PlayingCard key={i} card={card} size="lg" />
+                      <PlayingCard key={i} card={card} size="lg" dealIndex={i} />
                     ))}
                   </div>
                   <span className="bj__hand-meta">
@@ -206,8 +223,8 @@ export function BlackjackGame({
               {!view && (
                 <div className="bj__hand">
                   <div className="bj__cards">
-                    <PlayingCard faceUp={false} size="lg" />
-                    <PlayingCard faceUp={false} size="lg" />
+                    <PlayingCard faceUp={false} size="lg" dealIndex={0} />
+                    <PlayingCard faceUp={false} size="lg" dealIndex={1} />
                   </div>
                 </div>
               )}

@@ -67,6 +67,7 @@
   color: var(--text-dim);
   text-align: center;
   min-block-size: 1.4em;
+  animation: settle-in 300ms var(--ease-out-back) both;
 }
 
 .vp__result.is-win { color: var(--win); }

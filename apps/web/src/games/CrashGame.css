@@ -8,24 +8,112 @@
   inline-size: 100%;
 }
 
+/* ------------------------------------------------------------------ the strip -- */
+
+.crash__recent {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.28rem;
+  inline-size: min(100%, 42rem);
+  min-block-size: 1.7rem;
+}
+
+.crash__tick {
+  padding: 0.12rem 0.45rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  /* Newest first, so the one that just landed is the one that arrives. */
+  animation: crash-tick-in 280ms var(--ease-out-back) both;
+}
+
+.crash__tick.is-low  { color: var(--text-muted); border-color: color-mix(in srgb, var(--text-muted) 28%, transparent); }
+.crash__tick.is-mid  { color: var(--info);  border-color: color-mix(in srgb, var(--info) 38%, transparent);  background: color-mix(in srgb, var(--info) 10%, transparent); }
+.crash__tick.is-high { color: var(--gold-bright); border-color: color-mix(in srgb, var(--gold) 50%, transparent); background: color-mix(in srgb, var(--gold) 14%, transparent); }
+
+@keyframes crash-tick-in {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ----------------------------------------------------------------- the number -- */
+
 .crash__multiplier {
   font-size: clamp(2.4rem, 11vw, 4.5rem);
   font-weight: 800;
   line-height: 1;
   color: var(--gold);
-  transition: color 200ms ease;
+  transition: color 200ms ease, text-shadow 200ms ease;
 }
 
-.crash__multiplier.is-dead { color: var(--lose); }
-.crash__multiplier.is-cashed { color: var(--win); }
+/* A number that is still going gets a little louder the longer it goes. */
+.crash__multiplier.is-climbing {
+  text-shadow: 0 0 34px color-mix(in srgb, var(--gold) 45%, transparent);
+  animation: crash-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes crash-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.035); }
+}
+
+.crash__multiplier.is-dead {
+  color: var(--lose);
+  text-shadow: 0 0 30px color-mix(in srgb, var(--lose) 50%, transparent);
+  animation: crash-slam 420ms var(--ease-out-cubic) both;
+}
+
+@keyframes crash-slam {
+  0%   { transform: scale(1.3); opacity: 0.4; }
+  100% { transform: none; opacity: 1; }
+}
+
+.crash__multiplier.is-cashed {
+  color: var(--win);
+  text-shadow: 0 0 30px color-mix(in srgb, var(--win) 45%, transparent);
+}
+
+/* ------------------------------------------------------------------ the chart -- */
 
 .crash__canvas {
   inline-size: min(100%, 42rem);
-  block-size: clamp(9rem, 32vh, 16rem);
+  block-size: clamp(9rem, 34vh, 18rem);
   max-inline-size: 100%;
   border-radius: 0.9rem;
   border: 1px solid var(--panel-edge);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--felt-dark) 45%, transparent), transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--felt-dark) 45%, transparent), transparent);
+}
+
+/*
+ * The chart is hit, not recoloured.
+ *
+ * A curve that simply turns red has *stopped*; a curve that gets knocked sideways has
+ * been killed. It is four keyframes and it is the difference between the game's one
+ * dramatic moment reading as an event and reading as a state change.
+ */
+.crash__canvas.is-dead {
+  animation: crash-shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  border-color: color-mix(in srgb, var(--lose) 55%, transparent);
+}
+
+@keyframes crash-shake {
+  0%   { transform: translate(0, 0); }
+  15%  { transform: translate(-7px, 3px); }
+  35%  { transform: translate(6px, -3px); }
+  55%  { transform: translate(-4px, 2px); }
+  75%  { transform: translate(3px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crash__canvas.is-dead,
+  .crash__multiplier.is-climbing,
+  .crash__multiplier.is-dead,
+  .crash__tick { animation: none; }
 }
 
 .crash__status {

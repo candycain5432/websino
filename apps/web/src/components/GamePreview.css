@@ -1,28 +1,45 @@
 /**
  * The lobby's preview scenes.
  *
- * Every scene lives inside one fixed box, `.gp`, so fifteen different pictures line up
- * across a grid without any of them knowing about the others. Each is built from the
- * tokens its own game uses, so the palette moves them together.
+ * Every scene is drawn at one size and scaled by whoever is showing it, through the single
+ * `--gp-scale` handle - so fifteen different pictures line up across a grid, and a slab
+ * twice as wide gets the same drawing bigger rather than a second drawing to keep in step.
+ * Each is built from the tokens its own game uses, so the palette moves them together.
  *
  * The cards are the real `PlayingCard`, shrunk by overriding `--card-w` - which is the
  * component's only size input, so a preview card is the same drawing as a table card and
  * cannot drift from it.
+ *
+ * The motion is all at the foot of the file, under one heading, because it is the part
+ * that has to stay coherent across fifteen otherwise unrelated scenes.
  */
 
+/*
+ * The frame a scene is shown in.
+ *
+ * It used to be a fixed 88px band inside a bordered tile. Now it fills whatever is
+ * showing it - a lobby slab, twice as wide for a featured game - and the drawing inside
+ * is scaled to fit rather than redrawn per size. `--gp-scale` is the only size input, so
+ * there is exactly one set of dimensions to keep straight however many places use it.
+ */
 .gp {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
-  inline-size: 100%;
-  block-size: 88px;
   overflow: hidden;
-  /* The scene sits in its own pool of light, which lifts it off the tile. */
-  border-radius: var(--radius-sm);
+  /* The scene sits in its own pool of light, which lifts it off the ground. */
   background:
     radial-gradient(120% 130% at 50% 120%,
-      color-mix(in srgb, var(--tile-accent, var(--gold)) 16%, transparent) 0%,
-      transparent 68%);
+      color-mix(in srgb, var(--tile-accent, var(--gold)) 18%, transparent) 0%,
+      transparent 70%);
+}
+
+.gp__scene {
+  display: grid;
+  place-items: center;
+  scale: var(--gp-scale, 1);
+  transition: scale var(--dur-slow) var(--ease-out-cubic);
 }
 
 /* ------------------------------------------------------------------- cards -- */
@@ -36,7 +53,6 @@
 .gp__hand .card {
   --card-w: 38px;
   margin-inline-start: -14px;
-  animation: none;
   box-shadow: none;
 }
 
@@ -83,12 +99,21 @@
 
 /* --------------------------------------------------------------- the felt -- */
 
+/*
+ * Sized in pixels, not percentages.
+ *
+ * A scene used to be laid out inside a fixed 88px band, so a percentage meant something.
+ * Now the scene box shrink-wraps its contents and is scaled by whatever is showing it, so
+ * "78% wide" resolves against a width that is itself being derived from the contents -
+ * which collapsed the dice scale to `050100` and threw the crash curve off the top of its
+ * slab. Every scene states its own size; `--gp-scale` does the rest.
+ */
 .gp__felt {
   position: relative;
   display: grid;
   place-items: center;
-  inline-size: 92%;
-  block-size: 74%;
+  inline-size: 136px;
+  block-size: 76px;
   border-radius: 999px / 60px;
   background: var(--felt-surface);
   box-shadow: inset 0 0 0 2px var(--wood), inset 0 2px 6px rgb(0 0 0 / 50%);
@@ -120,23 +145,42 @@
   inline-size: 68px;
   block-size: 68px;
   border-radius: 50%;
-  /* The pockets, as a conic ring: alternating red and black with one green zero. */
-  background:
-    repeating-conic-gradient(
-      from -4deg,
-      #b22a2a 0deg 15deg,
-      #17191d 15deg 30deg
-    );
   box-shadow: 0 4px 10px rgb(0 0 0 / 50%);
 }
 
-.gp__wheel::before {
-  /* The single green zero, laid over the repeat at the top. */
-  content: '';
+/*
+ * The pockets, on their own element so they can turn.
+ *
+ * They used to be the wheel's own background, which meant rotating them would have
+ * rotated the rim and the hub with them - and a rim with a highlight on it that goes
+ * round with the wheel stops reading as metal catching the light.
+ */
+.gp__pockets {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(from -4deg, #1e7a4f 0deg 15deg, transparent 15deg);
+  background:
+    /* The single green zero, laid over the repeat. */
+    conic-gradient(from -4deg, #1e7a4f 0deg 15deg, transparent 15deg),
+    repeating-conic-gradient(from -4deg, #b22a2a 0deg 15deg, #17191d 15deg 30deg);
+  animation: gp-spin 9s linear infinite;
+}
+
+.gp__wheel--fortune .gp__pockets {
+  background: repeating-conic-gradient(
+    from 0deg, var(--gold) 0deg 22.5deg, var(--felt-dark) 22.5deg 45deg);
+  animation-duration: 6s;
+}
+
+@keyframes gp-spin {
+  to { rotate: 360deg; }
+}
+
+/* The ball: carried round by an arm, the other way, twice as fast. */
+.gp__orbit {
+  position: absolute;
+  inset: 0;
+  animation: gp-spin 3.4s linear infinite reverse;
 }
 
 .gp__wheel-rim {
@@ -170,18 +214,6 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 60%);
 }
 
-/* The prize wheel is the same object with a different face and a pointer. */
-.gp__wheel--fortune {
-  background:
-    repeating-conic-gradient(
-      from 0deg,
-      var(--gold) 0deg 22.5deg,
-      var(--felt-dark) 22.5deg 45deg
-    );
-}
-
-.gp__wheel--fortune::before { content: none; }
-
 .gp__pointer {
   position: absolute;
   inset-block-start: -7px;
@@ -207,24 +239,46 @@
 }
 
 .gp__reel {
-  display: grid;
-  place-items: center;
   inline-size: 26px;
   block-size: 38px;
   border-radius: 3px;
-  background:
-    radial-gradient(circle at 50% 45%,
-      color-mix(in srgb, var(--lose) 30%, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, #1b2024, #0a0d0f);
-  color: var(--lose);
-  font-size: 20px;
-  font-weight: 800;
+  overflow: hidden;
+  background: linear-gradient(180deg, #1b2024, #0a0d0f);
+  box-shadow: inset 0 6px 6px -6px #000, inset 0 -6px 6px -6px #000;
+}
+
+/*
+ * Half its own height, forever.
+ *
+ * The strip is four symbols printed twice, so the frame at -50% is pixel-identical to the
+ * frame at 0 - which is what makes an infinite linear loop have no seam in it. The three
+ * reels run at different speeds so they never line up and the window never looks like a
+ * single sheet sliding past.
+ */
+.gp__reel-strip {
+  display: grid;
+  animation: gp-reel 1s linear infinite;
+}
+
+@keyframes gp-reel {
+  to { transform: translateY(-50%); }
+}
+
+.gp__reel-cell {
+  display: grid;
+  place-items: center;
+  block-size: 38px;
+  /* Backlit from the symbol's own colour, the same way the real cabinet does it. */
+  background: radial-gradient(circle at 50% 45%,
+    color-mix(in srgb, currentcolor 26%, transparent) 0%, transparent 70%);
+  font-size: 19px;
+  line-height: 1;
   text-shadow: 0 0 1px currentcolor, 0 2px 3px rgb(0 0 0 / 70%);
 }
 
 /* ------------------------------------------------------------------ curves -- */
 
-.gp__svg { inline-size: 86%; block-size: 72%; }
+.gp__svg { inline-size: 120px; block-size: 64px; }
 
 .gp__limbo {
   display: flex;
@@ -239,7 +293,7 @@
 
 /* ------------------------------------------------------------------- dice -- */
 
-.gp__track { display: grid; gap: 5px; inline-size: 78%; justify-items: stretch; }
+.gp__track { display: grid; gap: 5px; inline-size: 108px; justify-items: stretch; }
 
 .gp__track-bar {
   display: flex;
@@ -381,8 +435,173 @@
 .gp__fallback { display: grid; place-items: center; opacity: 0.25; }
 .gp__fallback-suit { inline-size: 34px; block-size: 34px; color: var(--gold); }
 
-/* ------------------------------------------------------------------ narrow -- */
+/* =================================================================== motion == */
 
-@media (width <= 30rem) {
-  .gp { block-size: 76px; }
+/*
+ * What each scene does when nobody is touching it.
+ *
+ * Every one of these is a `transform` or an `opacity`, which the compositor animates
+ * without waking the main thread - fifteen of them running at once costs about what one
+ * of them costs, and none of them can make the page janky while you scroll past.
+ *
+ * The cycles are deliberately not round numbers of each other. Fifteen loops that share a
+ * period drift into step and the floor starts pulsing as one object, which looks like a
+ * screensaver; primes and near-primes keep it looking like fifteen separate machines.
+ */
+
+/* Cards deal in, sit, and deal again - a table being played, not a photograph of one. */
+.gp__hand .card { animation: gp-deal 5.2s var(--ease-out-cubic) infinite; }
+.gp__hand .card:nth-child(2) { animation-delay: 160ms; }
+.gp__hand .card:nth-child(3) { animation-delay: 320ms; }
+.gp__hand .card:nth-child(4) { animation-delay: 480ms; }
+.gp__hand .card:nth-child(5) { animation-delay: 640ms; }
+
+@keyframes gp-deal {
+  0%       { transform: translate(26px, -14px) rotate(14deg); opacity: 0; }
+  10%, 86% { transform: none; opacity: 1; }
+  96%,100% { transform: translate(-10px, 6px); opacity: 0; }
+}
+
+/* The clock going round a shared table. */
+.gp__seat.is-you { animation: none; }
+.gp__seat { animation: gp-seat 2.6s ease-in-out infinite; }
+
+@keyframes gp-seat {
+  0%, 70%, 100% { background: var(--panel-light); }
+  18%           { background: var(--gold-bright); }
+}
+
+/* Crash: the curve climbs, hangs, and is gone. */
+.gp__crash-line {
+  stroke-dasharray: 1;
+  animation: gp-climb 3.4s ease-in infinite;
+}
+
+@keyframes gp-climb {
+  0%        { stroke-dashoffset: 1; opacity: 1; }
+  62%, 84%  { stroke-dashoffset: 0; opacity: 1; }
+  93%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+.gp__crash-fill {
+  transform-origin: 4px 60px;
+  animation: gp-climb-fill 3.4s ease-in infinite;
+}
+
+@keyframes gp-climb-fill {
+  0%        { transform: scaleX(0); opacity: 0.9; }
+  62%, 84%  { transform: none; opacity: 0.9; }
+  93%, 100% { transform: none; opacity: 0; }
+}
+
+/*
+ * The head, carried along the same curve the line draws.
+ *
+ * `offset-path` takes the identical `d`, so the dot cannot come off the line however the
+ * curve is later reshaped - the alternative was a second set of keyframes describing the
+ * same arc in translate steps, which is two descriptions of one shape and one of them
+ * always ends up wrong.
+ */
+.gp__crash-head {
+  offset-path: path('M4 60 C40 58 72 44 104 8');
+  offset-rotate: 0deg;
+  animation: gp-climb-head 3.4s ease-in infinite;
+}
+
+@keyframes gp-climb-head {
+  0%        { offset-distance: 0%; opacity: 1; }
+  62%, 84%  { offset-distance: 100%; opacity: 1; }
+  93%, 100% { offset-distance: 100%; opacity: 0; }
+}
+
+/* Dice: the line you are betting over, sliding. */
+.gp__track-marker { animation: gp-slide 4.6s ease-in-out infinite alternate; }
+
+@keyframes gp-slide {
+  from { margin-inline-start: 38%; }
+  to   { margin-inline-start: 72%; }
+}
+
+/* Mines: tiles turning over one at a time, and the one you did not want. */
+.gp__cell.is-gem  { animation: gp-flip 3.8s ease-in-out infinite; }
+.gp__cell.is-bomb { animation: gp-boom 3.8s ease-in-out infinite; }
+.gp__cell.is-safe { animation: gp-flip 4.4s ease-in-out infinite; }
+
+@keyframes gp-flip {
+  0%, 55%, 100% { transform: scale(1); filter: none; }
+  30%           { transform: scale(1.22); filter: brightness(1.5); }
+}
+
+@keyframes gp-boom {
+  0%, 62%, 100% { transform: scale(1); filter: none; }
+  74%           { transform: scale(1.3); filter: brightness(1.8) saturate(1.4); }
+}
+
+/* Plinko: a ball, all the way down, over and over. */
+.gp__plinko-ball { animation: gp-drop 2.9s cubic-bezier(0.45, 0, 0.7, 1) infinite; }
+
+@keyframes gp-drop {
+  0%       { transform: translate(0, 0); opacity: 0; }
+  6%       { opacity: 1; }
+  24%      { transform: translate(-7px, 13px); }
+  46%      { transform: translate(3px, 26px); }
+  68%      { transform: translate(-5px, 39px); }
+  88%      { transform: translate(6px, 51px); opacity: 1; }
+  96%,100% { transform: translate(6px, 56px); opacity: 0; }
+}
+
+/* Bingo: the ball drops in, and the line it completes lights up behind it. */
+.gp__bingo-ball { animation: gp-call 3.1s var(--ease-out-back) infinite; }
+
+@keyframes gp-call {
+  0%       { transform: translateY(-16px) scale(0.6); opacity: 0; }
+  14%, 82% { transform: none; opacity: 1; }
+  94%,100% { transform: translateY(8px); opacity: 0; }
+}
+
+.gp__grid--bingo .gp__cell.is-marked { animation: gp-mark 3.1s ease-out infinite; }
+
+@keyframes gp-mark {
+  0%, 20%  { background: linear-gradient(180deg, var(--panel-light), var(--panel)); }
+  36%, 88% { background: var(--felt-light); }
+  100%     { background: linear-gradient(180deg, var(--panel-light), var(--panel)); }
+}
+
+/* Limbo: a target being closed on. */
+.gp__limbo-value { animation: gp-throb 2.3s ease-in-out infinite; }
+
+@keyframes gp-throb {
+  0%, 100% { opacity: 0.72; transform: scale(0.98); }
+  50%      { opacity: 1; transform: scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Still fifteen pictures of fifteen games, just not moving ones. Listed rather than
+   * blanket-disabled with `*`, so a scene added later has to make its own decision about
+   * what it does here instead of silently inheriting one.
+   */
+  .gp__hand .card,
+  .gp__seat,
+  .gp__pockets,
+  .gp__orbit,
+  .gp__reel-strip,
+  .gp__crash-line,
+  .gp__crash-fill,
+  .gp__crash-head,
+  .gp__track-marker,
+  .gp__cell.is-gem,
+  .gp__cell.is-bomb,
+  .gp__cell.is-safe,
+  .gp__plinko-ball,
+  .gp__bingo-ball,
+  .gp__grid--bingo .gp__cell.is-marked,
+  .gp__limbo-value {
+    animation: none;
+  }
+
+  /* The reel strip parks showing its first symbol rather than half of two. */
+  .gp__reel-strip { transform: none; }
+  .gp__crash-line { stroke-dasharray: none; }
+  .gp__crash-head { offset-distance: 100%; }
 }

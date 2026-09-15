@@ -122,7 +122,10 @@ export function MinesGame({
             })}
           </div>
 
-          <output className={`mines__readout${finished ? (view.payout > view.bet ? ' is-win' : ' is-loss') : ''}`}>
+          <output
+            key={`${view?.state ?? 'idle'}-${view?.payout ?? 0}`}
+            className={`mines__readout${finished ? (view.payout > view.bet ? ' is-win' : ' is-loss') : ''}`}
+          >
             {view === null
               ? 'Pick your mines and start a board'
               : view.state === 'busted'

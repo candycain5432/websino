@@ -41,9 +41,34 @@
 }
 
 .seat.is-you { border-color: var(--gold-dim); }
-.seat.is-turn { border-color: var(--gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 30%, transparent); }
+
+/*
+ * Whose turn it is, unmistakably.
+ *
+ * A static gold border was the old answer, and at a six-seat table it is the same
+ * signal as "this is your seat" - two different meanings in nearly the same colour,
+ * neither of which catches the eye while you are looking at the board. A seat on the
+ * clock now lifts off the felt and breathes. Motion is what the peripheral vision
+ * actually notices, which is the whole job here.
+ */
+.seat.is-turn {
+  border-color: var(--gold);
+  transform: translateY(-3px);
+  animation: turn-waiting 1.6s ease-in-out infinite;
+  z-index: 1;
+}
+
 .seat.is-folded { opacity: 0.45; }
 .seat.is-out { opacity: 0.3; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Still unmistakable, just not moving. */
+  .seat.is-turn {
+    animation: none;
+    transform: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 40%, transparent), var(--glow-gold);
+  }
+}
 
 .seat__head { display: flex; align-items: center; gap: 0.3rem; }
 .seat__name { font-size: 0.8rem; font-weight: 600; }
@@ -82,7 +107,52 @@
   font-weight: 700;
 }
 
-.seat__action { font-size: 0.66rem; color: var(--text-dim); min-block-size: 1em; }
+/*
+ * What a seat just did, as a badge rather than a whisper.
+ *
+ * This used to be 0.66rem of `--text-dim` under the chip count, which is about as close
+ * to invisible as text gets - and in the bots game every action between your turns is a
+ * bot's, so it was the *only* record of what happened and it was the least visible thing
+ * on the table. Now it pops in, and it is coloured by what kind of action it was: you
+ * can see a raise from across the felt without reading it.
+ */
+.seat__action {
+  min-block-size: 1.35em;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  animation: action-pop 260ms var(--ease-out-back) both;
+}
+
+.seat__action.is-fold {
+  color: var(--text-muted);
+  border-color: color-mix(in srgb, var(--text-muted) 30%, transparent);
+}
+
+.seat__action.is-passive {
+  color: var(--info);
+  border-color: color-mix(in srgb, var(--info) 35%, transparent);
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+}
+
+.seat__action.is-aggressive {
+  color: var(--gold-bright);
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+}
+
+/* The one action that ends somebody's hand, so it gets the loudest colour on the felt. */
+.seat__action.is-allin {
+  color: var(--lose);
+  border-color: color-mix(in srgb, var(--lose) 50%, transparent);
+  background: color-mix(in srgb, var(--lose) 16%, transparent);
+  font-weight: 750;
+}
+
+.seat__action.is-neutral { color: var(--text-dim); }
 
 .holdem__middle {
   display: flex;
@@ -165,6 +235,16 @@
   gap: 0.1rem;
   font-size: 0.72rem;
   color: var(--text-dim);
+}
+
+/* A line that was not there a moment ago. See `HandFeed`. */
+.holdem__log li.is-new {
+  animation: feed-line 300ms var(--ease-out-cubic) both;
+}
+
+@keyframes feed-line {
+  from { transform: translateX(-6px); opacity: 0; color: var(--gold-bright); }
+  to   { transform: none; opacity: 1; }
 }
 
 .holdem__keys { font-size: 0.7rem; color: var(--text-dim); }
