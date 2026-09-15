@@ -1,0 +1,52 @@
+# Render blueprint: https://render.com/docs/blueprint-spec
+#
+# One web service, not two. The client is served by the same Fastify process that serves
+# the API, because the whole client assumes one origin - a SameSite=Lax session cookie,
+# relative /api paths, and sockets opened against location.host. Putting the static build
+# on its own Render service would break all three at once and buy nothing.
+#
+# To deploy: push this file, then Render Dashboard -> New -> Blueprint -> pick the repo.
+# Everything below is applied automatically except the disk, which needs a paid instance.
+
+services:
+  - type: web
+    name: websino
+    runtime: node
+    plan: starter # Free has no persistent disk; see the `disk:` note below.
+    region: oregon
+    branch: main
+
+    # corepack is what makes `packageManager` in package.json authoritative, so Render
+    # builds with the same pnpm the lockfile and CI were written against.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @websino/server start
+
+    healthCheckPath: /api/tables
+
+    # SQLite is a file, and Render's container filesystem is rebuilt on every deploy and
+    # every restart. Without a disk the database is not "mostly fine" - every account,
+    # balance and ledger row is erased on each deploy, which is worse than not persisting
+    # at all because it looks like it works until the first redeploy.
+    #
+    # A disk requires a paid instance type. On the free plan, delete this block and treat
+    # the deployment as a demo: it will still run, and it will reset without warning.
+    disk:
+      name: websino-data
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        # Also what turns on `secure` on the session cookie. Render terminates TLS, so
+        # this is correct there and would lock you out over plain http locally.
+        value: production
+      - key: TRUST_PROXY
+        # Render puts a load balancer in front of every service, so without this every
+        # visitor shares one IP as far as the rate limiter is concerned - and therefore
+        # one budget. See the comment in apps/server/src/index.ts.
+        value: "1"
+      - key: WEBSINO_DB
+        # On the disk, not in the container. Must sit under `mountPath` above.
+        value: /var/data/websino.db

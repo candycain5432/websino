@@ -25,12 +25,54 @@ balance, or take the practice door and play offline with no account at all — t
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
-pnpm test         # 572 tests
+pnpm test         # 617 tests
 pnpm -r typecheck
 pnpm build        # static client bundle
+pnpm start        # production: one process serving the client and the API
 ```
 
 Node 22+ and pnpm 10+.
+
+---
+
+## Deploying
+
+One process serves the client **and** the API, and that is not a packaging convenience —
+it is what the client assumes. The session cookie is `SameSite=Lax`, every API call is a
+relative `/api/…` path, and both sockets are opened against `location.host`. Split the
+static build onto its own host and all three break at once: the cookie stops being sent,
+so you are signed out on every request, and the socket points somewhere with no server on
+it. Making that work cross-origin costs `SameSite=None; Secure`, a CORS allow-list and an
+absolute API base in the client — real complexity bought to solve a problem you can
+simply decline to have.
+
+So: `pnpm build` then `pnpm start`, behind TLS, with these set.
+
+| | |
+|---|---|
+| `PORT` | Supplied by most hosts. Defaults to 3000. |
+| `NODE_ENV=production` | Also what turns on `Secure` on the session cookie. |
+| `TRUST_PROXY=1` | **Required behind any load balancer.** Every rate limit is keyed on `request.ip`, which behind a proxy is the *proxy's* address for every visitor — so one shared budget, and the eleventh person ever to visit cannot sign up. Leave it unset when the server is exposed directly, because `X-Forwarded-For` is a header anyone can write. |
+| `WEBSINO_DB` | Path to the SQLite file. Put it on a persistent volume. |
+
+### Render
+
+[`render.yaml`](render.yaml) is a working blueprint — Dashboard → New → Blueprint → pick
+the repo, and everything above is applied for you.
+
+The one thing worth reading before you click deploy is the disk. SQLite is a file, and
+Render rebuilds the container filesystem on **every deploy and every restart**. Without a
+persistent disk that is not "mostly fine": every account, balance and ledger row is erased
+each time you push, which is worse than not persisting at all because it looks like it
+works until the first redeploy. A disk needs a paid instance type; on the free plan,
+delete the `disk:` block and treat it as a demo that resets without warning.
+
+Free instances also spin down after about fifteen minutes idle, which stops the room tick.
+Rooms are snapshotted to SQLite after every mutation so nothing is lost, but a shared
+hold'em table or a bingo round will not advance while the service is asleep.
+
+`tools/shots/deploy.mjs` drives a real browser against the production shape — one origin,
+no proxy in front — and is the only harness that runs the app the way a host runs it.
 
 ---
 
@@ -644,6 +686,10 @@ node tools/shots/online.mjs       # every game against a real server, asserted i
 node tools/shots/tables.mjs       # two browsers at one shared table
 node tools/shots/bingo.mjs        # two browsers watching one ball sequence
 node tools/shots/stats.mjs        # the lobby's lifetime figures, on both transports
+
+# The production shape: one origin, no proxy in front. Needs `pnpm build` first, then
+# `NODE_ENV=production PORT=3111 pnpm start`.
+node tools/shots/deploy.mjs
 ```
 
 The interesting tests are the invariants, not the line coverage:
