@@ -16,6 +16,7 @@ import type { RoomSummary, RoomView } from '@websino/engine';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PlayingCard } from '../components/PlayingCard.js';
+import { actionTone } from '../lib/actionTone.js';
 import { formatChips } from '../lib/format.js';
 import { fetchTables, TableSocket, type TableStatus } from '../lib/tableSocket.js';
 import type { HoldemAction } from '../lib/transport.js';
@@ -281,13 +282,15 @@ function LiveTable({
                 ) : seat.sittingOut ? (
                   <span className="pseat__open">sitting out</span>
                 ) : seat.hole ? (
-                  seat.hole.map((card, i) => <PlayingCard key={i} card={card} size="sm" />)
+                  seat.hole.map((card, i) => (
+                    <PlayingCard key={i} card={card} size="sm" dealIndex={i} />
+                  ))
                 ) : room.handInProgress ? (
                   // Face down means "dealt, and not yours to see". Drawing backs
                   // between hands would say that about cards that do not exist.
                   <>
-                    <PlayingCard faceUp={false} size="sm" />
-                    <PlayingCard faceUp={false} size="sm" />
+                    <PlayingCard faceUp={false} size="sm" dealIndex={0} />
+                    <PlayingCard faceUp={false} size="sm" dealIndex={1} />
                   </>
                 ) : (
                   <span className="pseat__open">waiting</span>
@@ -299,7 +302,15 @@ function LiveTable({
                 <span className="pseat__chips numeric">{formatChips(seat.chips)}</span>
               )}
               {seat.bet > 0 && <span className="pseat__bet numeric">{formatChips(seat.bet)}</span>}
-              {seat.lastAction && <span className="pseat__action">{seat.lastAction}</span>}
+              {/* Keyed so the badge re-animates each time the action changes. */}
+              {seat.lastAction && (
+                <span
+                  key={`${seat.lastAction}-${seat.bet}`}
+                  className={`pseat__action is-${actionTone(seat.lastAction)}`}
+                >
+                  {seat.lastAction}
+                </span>
+              )}
             </li>
           ))}
         </ol>
@@ -310,7 +321,7 @@ function LiveTable({
               const card = room.board[i];
               return card === undefined
                 ? <span key={i} className="baize__slot" />
-                : <PlayingCard key={i} card={card} size="md" />;
+                : <PlayingCard key={i} card={card} size="md" dealIndex={i % 3} />;
             })}
           </div>
           <div className="baize__pot">

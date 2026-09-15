@@ -109,3 +109,29 @@ input {
   background: color-mix(in srgb, var(--gold) 18%, var(--panel-light));
   color: var(--gold-bright);
 }
+
+/*
+ * A badge arriving.
+ *
+ * Shared by the two hold'em screens, which both pop a badge when a seat acts. Defined
+ * here rather than in whichever of them happened to come first, because a keyframe used
+ * across files and declared in one of them is a dependency nothing enforces - delete the
+ * wrong screen and the other silently stops animating.
+ */
+@keyframes action-pop {
+  from { transform: translateY(-4px) scale(0.86); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+/*
+ * Whose turn it is.
+ *
+ * Used by a hold'em seat on the clock, a shared-table seat on the clock, and the
+ * blackjack hand you are playing - three different elements making one claim, so it is
+ * one animation rather than three copies that can drift apart. Named for the meaning
+ * rather than for a seat, since a blackjack hand is not one.
+ */
+@keyframes turn-waiting {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 34%, transparent), var(--shadow); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 16%, transparent), var(--shadow-lg), var(--glow-gold); }
+}

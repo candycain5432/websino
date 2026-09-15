@@ -13,7 +13,16 @@
 
 export const MIN_BET = 1;
 export const MAX_BET = 100_000;
-export const STARTING_CHIPS = 1_000;
+/**
+ * What a new account is given.
+ *
+ * 2,500 rather than 1,000, so the opening stack clears the most expensive thing on the
+ * floor rather than sitting just under it. A shared hold'em table caps its buy-in at 100
+ * big blinds - 2,000 chips - which a 1,000-chip account could not reach at all, and four
+ * bingo cards at a serious stake ran it close too. A starting balance that cannot afford
+ * the games it is offered reads as the site being broken rather than as a limit.
+ */
+export const STARTING_CHIPS = 2_500;
 export const DAILY_BONUS_CHIPS = 750;
 export const BAILOUT_CHIPS = 500;
 export const BAILOUT_THRESHOLD = 50;

@@ -46,7 +46,17 @@
   to   { transform: none; opacity: 1; }
 }
 
-.card { animation: card-deal 260ms var(--ease-out-cubic) both; }
+.card {
+  /*
+   * `--deal-index` staggers a hand so it arrives card by card.
+   *
+   * 90ms is roughly the beat of a real dealer's wrist, and the difference between a hand
+   * appearing and a hand being *dealt* is entirely in this one multiplication. The
+   * component caps the index at 3, so the longest a card ever waits is 270ms.
+   */
+  animation: card-deal 260ms var(--ease-out-cubic) both;
+  animation-delay: calc(var(--deal-index, 0) * 90ms);
+}
 
 .card__inner {
   position: absolute;
