@@ -1,8 +1,9 @@
 import type { Card, HoldemView } from '@websino/engine';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { GameShell, type HistoryEntry } from '../components/GameShell.js';
 import { PlayingCard } from '../components/PlayingCard.js';
+import { actionTone } from '../lib/actionTone.js';
 import { formatChips } from '../lib/format.js';
 import type { GameTransport, HoldemAction } from '../lib/transport.js';
 import './HoldemGame.css';
@@ -185,12 +186,12 @@ export function HoldemGame({
                         <span className="seat__sitting-out">sitting out</span>
                       ) : s.hole ? (
                         s.hole.map((card: Card, i) => (
-                          <PlayingCard key={i} card={card} size="sm" />
+                          <PlayingCard key={i} card={card} size="sm" dealIndex={i} />
                         ))
                       ) : (
                         <>
-                          <PlayingCard faceUp={false} size="sm" />
-                          <PlayingCard faceUp={false} size="sm" />
+                          <PlayingCard faceUp={false} size="sm" dealIndex={0} />
+                          <PlayingCard faceUp={false} size="sm" dealIndex={1} />
                         </>
                       )}
                     </div>
@@ -200,7 +201,20 @@ export function HoldemGame({
                     )}
                     <span className="seat__chips numeric">{formatChips(s.chips)}</span>
                     {s.bet > 0 && <span className="seat__bet numeric">{formatChips(s.bet)}</span>}
-                    {s.lastAction && <span className="seat__action">{s.lastAction}</span>}
+                    {/*
+                      * Keyed on the action, so React replaces the node each time it
+                      * changes and the pop-in animation runs again. Without the key it is
+                      * one element whose text quietly mutates - which is exactly how a
+                      * bot's raise went by unnoticed.
+                      */}
+                    {s.lastAction && (
+                      <span
+                        key={`${s.lastAction}-${s.bet}`}
+                        className={`seat__action is-${actionTone(s.lastAction)}`}
+                      >
+                        {s.lastAction}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -211,7 +225,9 @@ export function HoldemGame({
                     const card = view.board[i];
                     return card === undefined
                       ? <span key={i} className="holdem__slot" />
-                      : <PlayingCard key={i} card={card} size="md" />;
+                      // The flop lands as three; the turn and river arrive alone, and
+                      // their index still gives them a beat before they appear.
+                      : <PlayingCard key={i} card={card} size="md" dealIndex={i % 3} />;
                   })}
                 </div>
                 <div className="holdem__pot">
@@ -313,9 +329,7 @@ export function HoldemGame({
           {seated && view.log.length > 0 && (
             <div className="holdem__log">
               <h2>This hand</h2>
-              <ol>
-                {view.log.slice(-8).map((line, i) => <li key={i}>{line}</li>)}
-              </ol>
+              <HandFeed log={view.log} />
             </div>
           )}
 
@@ -323,5 +337,51 @@ export function HoldemGame({
         </div>
       }
     />
+  );
+}
+
+/**
+ * The hand as it happened, arriving line by line.
+ *
+ * Against bots, every action between your turns resolves inside a single request - you
+ * press Call and the server plays three bots, deals the flop and hands back the finished
+ * position. The log is the only record that any of it happened, and as a block of four
+ * lines appearing at once it reads as a wall of text rather than as a sequence.
+ *
+ * So the lines that are *new since the last render* cascade in, about a tenth of a second
+ * apart. Nothing is delayed or withheld - the state is already correct the instant it
+ * arrives, and this only staggers how the words appear - but it turns "three things
+ * happened" into three things you watched happen.
+ *
+ * The count is tracked in a ref rather than state on purpose: writing it during render
+ * would schedule another render, and this needs to compare against the previous one, not
+ * cause a new one.
+ */
+function HandFeed({ log }: { log: string[] }) {
+  const seen = useRef(0);
+  const firstNew = Math.max(seen.current, 0);
+  seen.current = log.length;
+
+  const visible = log.slice(-8);
+  const offset = log.length - visible.length;
+
+  return (
+    <ol>
+      {visible.map((line, i) => {
+        const absolute = offset + i;
+        const isNew = absolute >= firstNew;
+        return (
+          <li
+            // Keyed by position *and* text: a line that did not change keeps its node and
+            // does not re-animate, while a genuinely new one mounts and does.
+            key={`${absolute}:${line}`}
+            className={isNew ? 'is-new' : ''}
+            style={isNew ? { animationDelay: `${(absolute - firstNew) * 110}ms` } : undefined}
+          >
+            {line}
+          </li>
+        );
+      })}
+    </ol>
   );
 }

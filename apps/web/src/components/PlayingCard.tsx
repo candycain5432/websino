@@ -1,3 +1,5 @@
+import type React from 'react';
+
 import { cardName, isRed, rankLabel, rankOf, suitOf, type Card } from '@websino/engine';
 
 import { SuitGlyph, SUIT_NAMES, type SuitName } from './SuitGlyph.js';
@@ -113,6 +115,7 @@ export function PlayingCard({
   size = 'md',
   highlighted = false,
   dimmed = false,
+  dealIndex = 0,
 }: {
   /** Explicitly `undefined` is meaningful here: it is the face-down case. */
   card?: Card | undefined;
@@ -121,6 +124,19 @@ export function PlayingCard({
   highlighted?: boolean;
   /** Folded, discarded, not held - drawn back rather than removed. */
   dimmed?: boolean;
+  /**
+   * Position in the hand, which staggers the deal animation.
+   *
+   * A dealer puts cards out one at a time, and two cards appearing in the same frame is
+   * the single clearest tell that nothing was dealt - the hand simply *was*. Passing the
+   * index makes a hand arrive card by card for the price of a CSS variable.
+   *
+   * The delay is capped at four cards in `PlayingCard.css`. Cards mount when they are
+   * dealt, so a hit lands alone and takes its index's delay whether or not anything else
+   * arrived with it; uncapped, the eighth card of a drawn-out hand would sit still for
+   * half a second before appearing, which reads as lag rather than as dealing.
+   */
+  dealIndex?: number;
 }) {
   const showFace = faceUp && card !== undefined;
   const suit: SuitName = showFace ? (SUIT_NAMES[suitOf(card)] as SuitName) : 'spade';
@@ -138,7 +154,12 @@ export function PlayingCard({
     .join(' ');
 
   return (
-    <div className={classes} role="img" aria-label={showFace ? cardName(card) : 'face down card'}>
+    <div
+      className={classes}
+      role="img"
+      aria-label={showFace ? cardName(card) : 'face down card'}
+      style={{ '--deal-index': Math.min(dealIndex, 3) } as React.CSSProperties}
+    >
       <div className="card__inner">
         {showFace ? (
           <>

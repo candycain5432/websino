@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { formatChips } from '../lib/format.js';
 import type { GameTransport } from '../lib/transport.js';
 import { BetControls } from './BetControls.js';
+import { Celebration } from './Celebration.js';
 import { FairnessDrawer } from './FairnessDrawer.js';
 import './GameShell.css';
 
@@ -49,6 +50,16 @@ export function GameShell({
   onTopUp?: (() => void) | undefined;
 }) {
   const broke = balance < 1;
+  /*
+   * The most recent round, if it was won.
+   *
+   * Read off the top of the history rather than passed in, because every game already
+   * puts its rounds there and none of them would otherwise have to know that winning is
+   * something the shell reacts to. A game that pushes or loses puts `won: false` there and
+   * this is simply null.
+   */
+  const latest = history[0];
+  const won = latest?.won === true ? latest : null;
 
   return (
     <div className="shell">
@@ -73,7 +84,10 @@ export function GameShell({
       </header>
 
       <main className="shell__main">
-        <section className="shell__board">{board}</section>
+        <section className="shell__board">
+          {board}
+          <Celebration win={won} stake={bet} />
+        </section>
 
         <aside className="shell__panel">
           <BetControls

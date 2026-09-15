@@ -8,6 +8,7 @@
   color: var(--text-dim);
   letter-spacing: -0.03em;
   transition: color var(--dur), text-shadow var(--dur);
+  animation: settle-in 340ms var(--ease-out-back) both;
 }
 .dice__roll.is-win  { color: var(--win);  text-shadow: var(--glow-win); }
 .dice__roll.is-loss { color: var(--lose); text-shadow: var(--glow-lose); }

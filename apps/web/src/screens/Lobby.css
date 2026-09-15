@@ -1,10 +1,15 @@
 /**
  * The lobby.
  *
- * Zoned rather than gridded: three named rooms, each a row of tiles that *show* their
- * game. The previous version was one flat `auto-fill` grid of fifteen, which reflowed
- * neatly and told you nothing - every tile the same weight, every tile read left to right
- * until you found the name you wanted.
+ * Zoned rather than gridded: three named rooms, each holding slabs of art that *are* their
+ * game. Two things here are worth knowing before changing anything.
+ *
+ * The grid is named `.lobby__floor` rather than `.floor`, which is what it wants to be
+ * called, because the shared-table screen already owns `.floor` - one global stylesheet,
+ * and `styles.test.ts` is what stopped that being discovered by a broken layout instead.
+ *
+ * And nothing in here draws a box. The lift, the accent ring and the scrim over the
+ * caption are all there is; a border would put the bordered card straight back.
  */
 
 .lobby {
@@ -13,6 +18,17 @@
   margin-inline: auto;
   padding: var(--space-5) var(--space-5) var(--space-8);
   display: grid;
+  /*
+   * `minmax(0, 1fr)`, never plain `auto`.
+   *
+   * An `auto` track is sized from its contents, and one of the contents is a grid of its
+   * own using `repeat(auto-fill, ...)`. Asked how wide it would *like* to be, that grid
+   * answers with as many columns as it has games - so the lobby sized itself to six
+   * columns of slabs and the whole page scrolled sideways on a phone, header and all.
+   * Flooring the track at zero makes the viewport the input to the inner grid rather than
+   * the other way round.
+   */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
 }
 
@@ -96,12 +112,14 @@
   text-align: center;
 }
 
-/* Two cards leaning together above the wordmark, like a sign over a door. */
-.lobby__cards { display: flex; margin-block-end: var(--space-3); }
-.lobby__cards .card { animation: none; }
-.lobby__cards > :first-child { rotate: -12deg; }
-.lobby__cards > :last-child  { rotate: 8deg; margin-inline-start: -28px; }
-
+/*
+ * The wordmark, lit.
+ *
+ * The gold is a background clipped to the letterforms, and a white band is laid over it
+ * wide enough to be a highlight and no wider. Sliding the whole background is what makes
+ * it read as light moving across metal rather than as the letters changing colour: the
+ * band travels, the gold under it does not.
+ */
 .lobby__title {
   font-family: var(--font-display);
   /* Fluid, because this is the one piece of type on the site that is purely an image. */
@@ -109,12 +127,26 @@
   font-weight: 800;
   line-height: 1;
   letter-spacing: var(--track-display);
-  background: var(--gold-leaf);
+  background:
+    linear-gradient(105deg,
+      transparent 38%,
+      rgb(255 255 255 / 75%) 47%,
+      rgb(255 255 255 / 75%) 52%,
+      transparent 61%),
+    var(--gold-leaf);
+  background-size: 260% 100%, 100% 100%;
+  background-position: 160% 0, 0 0;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   /* The glow sits behind the letterforms; `background-clip: text` cannot cast one. */
   filter: drop-shadow(0 0 26px rgb(212 175 55 / 22%));
+  animation: lobby-sheen 7s ease-in-out infinite;
+}
+
+@keyframes lobby-sheen {
+  0%, 62% { background-position: 160% 0, 0 0; }
+  88%,100% { background-position: -60% 0, 0 0; }
 }
 
 .lobby__tagline {
@@ -137,7 +169,7 @@
 
 /* ------------------------------------------------------------------- the rooms -- */
 
-.lobby__room { display: grid; gap: var(--space-3); }
+.lobby__room { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
 
 .lobby__room-name {
   display: flex;
@@ -162,113 +194,160 @@
   color: var(--text-muted);
 }
 
-.lobby__grid {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+/*
+ * Uniform rows, deliberately uneven cells.
+ *
+ * `grid-auto-rows` rather than letting content set the height, because a slab has no
+ * content to be as tall as - it is a picture with a caption over it, and a picture needs
+ * to be told how big it is. Fixing the row height is also what lets one slab take two
+ * columns without dragging the rest of its row out of line.
+ */
+.lobby__floor {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-  gap: var(--space-4);
+  /*
+   * Wide enough that a full-width floor holds three, not four.
+   *
+   * The column count is what decides how ragged the last row looks, because a room is a
+   * fixed number of games and one of them takes two columns. At four columns the card
+   * room's five cells leave three empty at the end of the second row, which reads as
+   * something having failed to load; at three it leaves one, which reads as a margin.
+   */
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  grid-auto-rows: 210px;
+  gap: var(--space-3);
+  /* So a single slab slides up into the gap beside a feature rather than sitting under it. */
+  grid-auto-flow: row dense;
 }
 
-/* -------------------------------------------------------------------- a tile -- */
+.lobby__floor > li { display: grid; min-inline-size: 0; }
 
 /*
- * The accent is committed to an *edge*, not a wash.
+ * The double-width slab, only where there is width to spend.
  *
- * An earlier version put a soft radial of the game's accent across the top of a grey
- * panel; every accent went through the same 25%-opacity blur onto the same murky ground,
- * so fifteen distinguishable games came out as fifteen near-identical brown rectangles.
- * A saturated hairline reads at a glance and stays exactly as authored.
+ * Below this the grid is one or two columns, and a cell spanning two of two is a full-
+ * width banner - which on a phone is not emphasis, it is just the biggest thing in the
+ * way of everything else.
  */
-.tile {
+@media (width >= 50rem) {
+  .lobby__floor-wide { grid-column: span 2; }
+}
+
+/* -------------------------------------------------------------------- a slab -- */
+
+/*
+ * A game, with nothing drawn around it.
+ *
+ * No border and no panel: the art runs to all four edges and the name sits on top of it.
+ * Everything that reads as chrome has been taken out, because chrome is what made fifteen
+ * games look like fifteen database rows. What is left to say "this is a thing you press"
+ * is the accent glow under the art, the type over the bottom of it, and the fact that the
+ * whole slab lifts and brightens when you point at it.
+ */
+.slab {
   position: relative;
+  display: block;
   inline-size: 100%;
-  display: grid;
-  align-content: start;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-  border: 1px solid var(--panel-edge);
+  block-size: 100%;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 55%);
-  box-shadow: var(--shadow-sm), var(--edge-lit);
-  text-align: start;
   overflow: hidden;
+  background: linear-gradient(170deg, #142219 0%, #0a1310 100%);
+  box-shadow: var(--shadow-sm);
+  text-align: start;
+  /* The art is scaled inside; this keeps the rounded corners doing the clipping. */
+  isolation: isolate;
+  --gp-scale: 1.5;
   transition:
     transform var(--dur) var(--ease-out-cubic),
-    border-color var(--dur),
-    box-shadow var(--dur);
+    box-shadow var(--dur),
+    filter var(--dur);
 }
 
-.tile::before {
-  content: '';
+.slab--wide { --gp-scale: 2.1; }
+
+/* The scrim: opaque under the caption, gone by halfway up. */
+.slab__scrim {
   position: absolute;
-  inset-block-start: 0;
-  inset-inline: 0;
-  block-size: 2px;
-  background: linear-gradient(90deg,
-    transparent, var(--tile-accent) 18%, var(--tile-accent) 82%, transparent);
-  opacity: 0.85;
+  inset: 0;
+  background: linear-gradient(0deg,
+    rgb(5 10 8 / 92%) 0%,
+    rgb(5 10 8 / 70%) 26%,
+    rgb(5 10 8 / 10%) 52%,
+    transparent 72%);
   transition: opacity var(--dur);
 }
 
-.tile__glow {
+.slab__label {
   position: absolute;
-  inset-block-start: -70px;
-  inset-inline: -10%;
-  block-size: 150px;
-  background: radial-gradient(ellipse at 50% 100%, var(--tile-accent), transparent 68%);
-  opacity: 0.14;
-  transition: opacity var(--dur);
+  inset-inline: var(--space-4);
+  inset-block-end: var(--space-3);
+  display: grid;
+  gap: 1px;
 }
 
-.tile:hover:not(:disabled) {
-  transform: translateY(-4px);
-  border-color: color-mix(in srgb, var(--tile-accent) 55%, var(--panel-edge));
-  box-shadow: var(--shadow-lg), var(--edge-lit-strong);
-}
-.tile:hover:not(:disabled) .tile__glow { opacity: 0.3; }
-.tile:hover:not(:disabled)::before { opacity: 1; }
-/* The preview leans in when you do. */
-.tile:hover:not(:disabled) .gp { transform: scale(1.05); }
-
-.tile:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
-
-.tile .gp {
-  margin-block-end: var(--space-2);
-  transition: transform var(--dur) var(--ease-out-cubic);
-}
-
-.tile__name {
+.slab__name {
   font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 600;
   letter-spacing: var(--track-display);
   color: var(--text);
+  text-shadow: 0 2px 10px rgb(0 0 0 / 80%);
 }
 
-.tile__tagline {
+.slab__line {
   color: var(--text-dim);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   line-height: 1.35;
-  /* Reserve two lines so tiles line up whether or not the tagline wraps. */
-  min-block-size: 2.7em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 80%);
 }
 
-.tile__badge {
-  justify-self: start;
-  margin-block-start: var(--space-1);
-  padding: 3px var(--space-2);
-  border: 1px solid color-mix(in srgb, var(--tile-accent) 38%, transparent);
+/* The house's terms, kept out of the way in the corner rather than under the name. */
+.slab__badge {
+  position: absolute;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  padding: 2px var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--tile-accent) 40%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--tile-accent) 14%, transparent);
+  background: rgb(5 10 8 / 62%);
   color: var(--tile-accent);
   font-size: var(--text-xs);
   font-weight: 650;
   letter-spacing: 0.02em;
+  backdrop-filter: blur(3px);
 }
 
-.tile--soon { opacity: 0.5; }
+/*
+ * Pointing at a slab.
+ *
+ * The lift is small and the change in the art is not: the scene grows, the scrim thins,
+ * and the accent floods the edges. The effect wanted is walking up to a machine, which is
+ * mostly the machine getting bigger and brighter - not the frame around it changing
+ * colour, which is the only thing the bordered version could do.
+ */
+.slab:hover:not(:disabled),
+.slab:focus-visible {
+  transform: translateY(-4px);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px color-mix(in srgb, var(--tile-accent) 55%, transparent),
+    0 0 34px -6px color-mix(in srgb, var(--tile-accent) 55%, transparent);
+}
+
+.slab:hover:not(:disabled) .gp__scene,
+.slab:focus-visible .gp__scene { scale: calc(var(--gp-scale) * 1.1); }
+
+.slab:hover:not(:disabled) .slab__scrim,
+.slab:focus-visible .slab__scrim { opacity: 0.82; }
+
+.slab:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
+
+/* Shut: still shown, still recognisable, plainly not open. */
+.slab.is-shut { filter: grayscale(0.7) brightness(0.62); cursor: not-allowed; }
 
 /* ------------------------------------------------------------------- the record -- */
 
@@ -322,8 +401,20 @@
 
 @media (width <= 40rem) {
   .lobby { padding-inline: var(--space-4); gap: var(--space-5); }
-  .lobby__grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .lobby__motif-suit { inline-size: 18rem; block-size: 18rem; }
-  .tile { padding: var(--space-2) var(--space-3) var(--space-3); }
-  .tile__tagline { font-size: var(--text-xs); }
+  .lobby__floor { grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); grid-auto-rows: 150px; }
+  .slab { --gp-scale: 1.2; }
+  .slab__label { inset-inline: var(--space-3); inset-block-end: var(--space-2); }
+  .slab__name { font-size: var(--text-base); }
+  /* One line of caption is all there is room for, and the name is the load-bearing one. */
+  .slab__line { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lobby__title { animation: none; }
+  .slab { transition: box-shadow var(--dur); }
+  .slab:hover:not(:disabled),
+  .slab:focus-visible { transform: none; }
+  /* Qualified, because `.gp__scene` belongs to GamePreview.css and is only tweaked here. */
+  .slab .gp__scene { transition: none; }
 }

@@ -21,7 +21,8 @@ pnpm dev          # client on :5173, server on :3000
 ```
 
 Then open <http://localhost:5173>. Create an account to play against a server-held
-balance, or take the practice door and play offline with no account at all — the games
+balance — new accounts open with 2,500 chips, enough to cover the most expensive seat on
+the floor — or take the practice door and play offline with no account at all. The games
 are identical either way, because both run the same engine behind the same interface.
 
 ```bash
@@ -54,6 +55,7 @@ So: `pnpm build` then `pnpm start`, behind TLS, with these set.
 | `NODE_ENV=production` | Also what turns on `Secure` on the session cookie. |
 | `TRUST_PROXY=1` | **Required behind any load balancer.** Every rate limit is keyed on `request.ip`, which behind a proxy is the *proxy's* address for every visitor — so one shared budget, and the eleventh person ever to visit cannot sign up. Leave it unset when the server is exposed directly, because `X-Forwarded-For` is a header anyone can write. |
 | `WEBSINO_DB` | Path to the SQLite file. Put it on a persistent volume. |
+| `WEBSINO_DEV_CHEATS` | **Leave unset.** `1` registers `POST /api/dev/grant`, which mints chips for the signed-in account. See [Developer chips](#developer-chips). |
 
 ### Render
 
@@ -73,6 +75,30 @@ hold'em table or a bingo round will not advance while the service is asleep.
 
 `tools/shots/deploy.mjs` drives a real browser against the production shape — one origin,
 no proxy in front — and is the only harness that runs the app the way a host runs it.
+
+### Developer chips
+
+A temporary console helper for topping yourself up while building. Start the server with
+`WEBSINO_DEV_CHEATS=1`, then in the browser console:
+
+```js
+websino.chips(50000)   // grant yourself chips
+websino.balance()      // what the server thinks you have
+websino.help()
+```
+
+Unless that variable is set the route is **never registered** — a normal deployment
+answers `/api/dev/grant` with a 404 and there is no code behind it. An endpoint that mints
+chips should not be one config mistake away from being live, so it is absent rather than
+merely refusing, and the server says so loudly at boot when it is on.
+
+Granted chips are an ordinary `adjustment` row in the ledger, so `auditBalances()` still
+reconciles and the lobby's `net` excludes them — cheated chips never read as winnings.
+
+**To remove it, delete four things:** `apps/server/src/dev/cheats.ts`,
+`apps/web/src/lib/devCheats.ts`, and the one call and import each in
+`apps/server/src/index.ts` and `apps/web/src/App.tsx`. Nothing else refers to it, and
+`pnpm -r typecheck` will confirm.
 
 ---
 
@@ -579,18 +605,45 @@ currency. Achievements and leaderboards will only ever count online play.
 
 ![The lobby](docs/screenshots/lobby.png)
 
-**The lobby is a floor, not a list.** Every tile shows its game — a real hand of cards, a
-reel window reading 7-7-7, a wheel, a rising curve — because you find the table you want
-by recognising it, not by reading fifteen names. Each preview is built from the same
-tokens as the game it advertises (the blackjack tile is two actual `PlayingCard`s, not a
-picture of cards), so it cannot drift into showing something the game no longer looks
-like, and none of them carry state: a preview is a cover, and a cover that quietly went
-out of date would be worse than none.
+**The lobby is a floor, not a list.** There is no tile and no border: each game is a slab
+of its own art, edge to edge, with its name written over the bottom — because you find the
+table you want by recognising it, not by reading fifteen names, and a bordered card with a
+thumbnail inside reads as a *record* of a game rather than as the game. One per room gets
+double the width, since a grid of equal cells has nothing to look at first.
+
+**And all fifteen of them move.** Reels turn, the roulette ball orbits, the crash curve
+climbs and dies, a plinko ball falls. Fifteen still pictures is a brochure however good the
+pictures are, and a casino floor is the one room in the world that is never still. It is
+all CSS transforms and opacity, so the whole floor animating costs about what one of them
+costs and none of it can make the page stutter while you scroll.
+
+Each scene is built from the same tokens as the game it advertises — the blackjack slab is
+two actual `PlayingCard`s and the slots slab runs the golden cabinet's own symbols, not
+pictures of them — so a preview cannot drift into showing something the game no longer
+looks like. None of them carry state: the motion is a loop, never a live round. A preview
+is a cover, and a cover that quietly went out of date would be worse than none.
 
 The floor is zoned the way a real one is — a card room, the machine floor, and the fast
 games — and the foot of it carries your record: rounds played, lifetime wagered, net and
 peak stack. `net` is measured against everything the house has *given* you rather than a
 fixed opening stack, so a top-up or a daily bonus never reads as profit.
+
+![Roulette](docs/screenshots/roulette.png)
+
+**Nothing settles instantly.** The reels spin down one at a time, left to right, over
+twenty symbols of travel and an easing curve that brakes late so the last few go past slowly
+enough to read. The roulette wheel turns for four and a half seconds while the ball runs the
+other way round the track, falls down the cone with two shrinking bounces and rides its
+pocket to a stop. The crash curve is ruled in multipliers, carries a lit head, and when it
+dies the chart is knocked sideways and the head blows apart.
+
+All of that is presentation over an outcome the server had already chosen before the first
+frame. The rotation is computed *backwards* from the winning pocket; a reel's landing
+position is the three symbols the round already decided, sitting at the end of the strip.
+There is no path through any of it that could come to rest somewhere other than the answer.
+What the animation does control is the one thing it should: everything that would give the
+result away — the number, the lit spots on the felt, the payout, the win celebration — waits
+for the thing that decides it to stop moving.
 
 ![The deck](docs/screenshots/deck.png)
 

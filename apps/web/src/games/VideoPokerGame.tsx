@@ -154,7 +154,10 @@ export function VideoPokerGame({
             ))}
           </div>
 
-          <output className={`vp__result${view?.payout ? ' is-win' : ''}`}>
+          <output
+            key={`${view?.phase ?? 'idle'}-${view?.resultName ?? ''}`}
+            className={`vp__result${view?.payout ? ' is-win' : ''}`}
+          >
             {view === null
               ? 'Deal to play'
               : view.phase === 'holding'
