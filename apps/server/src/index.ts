@@ -8,10 +8,15 @@
  * is something to broadcast.
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
-import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
@@ -36,6 +41,74 @@ import {
   startMinesRound, startTowersRound, towersStatus, videoPokerStatus,
 } from './sessions.js';
 
+/**
+ * Serve the built client from the same origin as the API.
+ *
+ * One origin is not a deployment convenience, it is what the whole client assumes. The
+ * session cookie is `SameSite=Lax`, every API call is a relative `/api/...` path, and the
+ * table and bingo sockets are opened against `location.host`. Split the client onto its
+ * own host - two Render services, a CDN, anything - and all three break at once: the
+ * cookie stops being sent, so you are signed out on every request; and the WebSocket
+ * points at a host with no server on it.
+ *
+ * Making that work cross-origin means `SameSite=None; Secure`, a CORS allow-list with
+ * credentials, and an absolute API base in the client. All of that is a real cost paid to
+ * solve a problem you can decline to have. So: Fastify serves `apps/web/dist`, and there
+ * is exactly one origin.
+ *
+ * In development the client is served by Vite, which proxies `/api` and `/ws` here, so
+ * `dist/` is usually absent. That is not an error - it is the normal dev shape - so a
+ * missing build is skipped with a note rather than a crash.
+ */
+async function serveClient(app: FastifyInstance): Promise<void> {
+  const root = fileURLToPath(new URL('../../web/dist/', import.meta.url));
+  if (!existsSync(join(root, 'index.html'))) {
+    console.warn(`no client build at ${root} - serving the API only (run: pnpm build)`);
+    return;
+  }
+
+  /*
+   * Assets carry a content hash in their filename, so a given URL's bytes never change
+   * and it can be cached forever.
+   */
+  await app.register(fastifyStatic, { root, maxAge: '1y', immutable: true });
+
+  /*
+   * `index.html` is the exception, and it has to be.
+   *
+   * It is the one file whose contents change at the same URL - it is what points at the
+   * new asset hashes - so caching it for a year is precisely how a deploy serves a page
+   * that asks for files the deploy just deleted. A returning visitor gets a blank screen
+   * and a 404 in the console until they hard-refresh.
+   *
+   * Set from a hook keyed on the content type rather than from the plugin's `setHeaders`,
+   * for two reasons: it also covers the SPA fallback below, which the plugin never sees;
+   * and `setHeaders` is typed as taking a `FastifyReply` while the version underneath
+   * hands it a raw `ServerResponse`, so the type-correct call is the one that throws.
+   */
+  app.addHook('onSend', async (_request, reply) => {
+    const type = reply.getHeader('content-type');
+    if (typeof type === 'string' && type.startsWith('text/html')) {
+      reply.header('cache-control', 'no-store');
+    }
+  });
+
+  /*
+   * The SPA fallback: an unknown GET is a client route, so hand it the app.
+   *
+   * Except under `/api` and `/ws`, which must keep returning JSON and a real 404.
+   * Falling those through to `index.html` would mean a mistyped endpoint answering 200
+   * with a page, and the client's `call()` would fail trying to parse HTML as JSON -
+   * "Unexpected token '<'", which says nothing about the actual mistake.
+   */
+  app.setNotFoundHandler((request, reply) => {
+    if (request.method !== 'GET' || /^\/(api|ws)\b/.test(request.url)) {
+      return reply.code(404).send({ error: 'not found' });
+    }
+    return reply.sendFile('index.html');
+  });
+}
+
 const credentials = z.object({
   username: z.string().min(1).max(64),
   password: z.string().min(1).max(200),
@@ -48,7 +121,22 @@ const playBody = z.object({
 });
 
 export async function buildServer(db: Db = openDatabase()) {
-  const app = Fastify({ logger: false });
+  /**
+   * `trustProxy` is opt-in, and it is not optional behind a load balancer.
+   *
+   * Every rate limit here is keyed on `request.ip`. Behind a proxy - Render, Fly, a
+   * Cloudflare tunnel, nginx - that is the *proxy's* address for every visitor on the
+   * site, so the 120-a-minute budget becomes one shared budget and the ten-signups-an-
+   * hour limit stops the eleventh person who ever visits. The limits do not fail open,
+   * they fail *closed*, on everyone at once, which is the kind of thing that only shows
+   * up once two people are using it.
+   *
+   * Opt-in rather than always on, because `X-Forwarded-For` is a header a client can
+   * simply write. Trusting it on a server reachable directly hands every visitor an IP
+   * of their choosing and makes the same limits meaningless in the other direction. So:
+   * set `TRUST_PROXY=1` when something in front terminates TLS, and never otherwise.
+   */
+  const app = Fastify({ logger: false, trustProxy: process.env.TRUST_PROXY === '1' });
 
   await app.register(cookie);
   await app.register(websocket);
@@ -404,6 +492,8 @@ export async function buildServer(db: Db = openDatabase()) {
     bingoHall.viewFor('bingo-hall', requireUser(request).id));
 
   registerBingoSocket(app, db, bingoHall);
+
+  await serveClient(app);
 
   // Started here rather than in the registry's constructor so a test can build a server
   // without a background timer running under it.
