@@ -13,9 +13,11 @@
 import type {
   BlackjackAction, BlackjackApi, BlackjackView, CrashApi, CrashView,
   FairnessState, GameTransport, HiLoApi, HiLoView, HoldemAction, HoldemApi, HoldemView,
-  MinesApi, MinesView, PlayerStats, PlayRequest, PlayResponse, TowersApi, TowersView,
-  VideoPokerApi, VideoPokerView,
+  MinesApi, MinesView, PlayerStats, PlayRequest, PlayResponse, Settings, TowersApi,
+  TowersView, VideoPokerApi, VideoPokerView,
 } from './transport.js';
+
+import { DEFAULT_THEME, isTheme } from './theme.js';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -26,7 +28,7 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(path: string, method: 'GET' | 'POST' = 'GET', body?: unknown): Promise<T> {
+async function call<T>(path: string, method: 'GET' | 'POST' | 'PUT' = 'GET', body?: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
@@ -72,6 +74,26 @@ export class HttpTransport implements GameTransport {
 
   async getStats(): Promise<PlayerStats> {
     return call<PlayerStats>('/api/me/stats');
+  }
+
+  /*
+   * The account is the authority on how the site looks to this player.
+   *
+   * The server stores whatever string it was handed and does not know which themes
+   * exist, so an account carrying a theme this build has since removed comes back as
+   * something `isTheme` rejects - and falls through to the default rather than putting
+   * an unknown name on the document and rendering an unstyled page.
+   */
+  async getSettings(): Promise<Settings> {
+    const { theme } = await call<{ theme: string }>('/api/me/settings');
+    return { theme: isTheme(theme) ? theme : DEFAULT_THEME };
+  }
+
+  async setSettings(patch: Partial<Settings>): Promise<Settings> {
+    const current = await this.getSettings();
+    const next: Settings = { ...current, ...patch };
+    await call<{ theme: string }>('/api/me/settings', 'PUT', { theme: next.theme });
+    return next;
   }
 
   async play(request: PlayRequest): Promise<PlayResponse> {

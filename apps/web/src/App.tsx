@@ -18,10 +18,12 @@ import { HttpTransport } from './lib/httpTransport.js';
 // TEMPORARY: developer chip grant. See apps/web/src/lib/devCheats.ts to remove.
 import { installDevCheats } from './lib/devCheats.js';
 import { LocalTransport } from './lib/localTransport.js';
+import { applyTheme } from './lib/theme.js';
 import type { GameTransport } from './lib/transport.js';
 import { BingoHall } from './screens/BingoHall.js';
 import { Deck } from './screens/Deck.js';
 import { Lobby } from './screens/Lobby.js';
+import { Settings } from './screens/Settings.js';
 import { SignIn } from './screens/SignIn.js';
 import { Tables } from './screens/Tables.js';
 
@@ -96,6 +98,26 @@ export function App() {
   }, [transport, refresh]);
 
   /*
+   * Put the account's theme on as soon as there is an account.
+   *
+   * `main.tsx` has already painted whatever this browser had cached, which covers the
+   * common case of the same person on the same machine. This covers the other one: a
+   * player signing in somewhere new, whose cache says green and whose account says
+   * Royal. Without it the room only appeared once they happened to open Settings, which
+   * is the one screen where they already know what they chose.
+   *
+   * `applyTheme` writes the cache, so the next load of *this* browser starts correct.
+   */
+  useEffect(() => {
+    if (!transport) return;
+    let live = true;
+    void transport.getSettings()
+      .then((settings) => { if (live) applyTheme(settings.theme); })
+      .catch(() => { /* keep what the cache painted */ });
+    return () => { live = false; };
+  }, [transport]);
+
+  /*
    * TEMPORARY: the developer chip grant. Delete this block and its import to remove it,
    * along with apps/web/src/lib/devCheats.ts and apps/server/src/dev/cheats.ts.
    */
@@ -143,6 +165,10 @@ export function App() {
   if (screen === 'towers') return <TowersGame {...shared} />;
   if (screen === 'wheel') return <WheelGame {...shared} />;
   if (screen === 'holdem') return <HoldemGame {...shared} />;
+
+  if (screen === 'settings') {
+    return <Settings transport={transport} balance={balance} onBack={backToLobby} />;
+  }
   // Shared tables talk to the server directly rather than through a transport: there is
   // no local dealer for a table other people are sitting at, and pretending otherwise
   // with a practice implementation would be a different game wearing the same name.

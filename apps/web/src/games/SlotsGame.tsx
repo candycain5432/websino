@@ -31,6 +31,21 @@ const SPIN_CELLS = 20;
 const SPIN_MS = 1_150;
 const REEL_STAGGER_MS = 190;
 
+/**
+ * Auto-spin.
+ *
+ * A count rather than a toggle, and no unbounded option. "Until I stop" is one forgotten
+ * tab away from a machine playing a hundred thousand rounds against an account nobody is
+ * watching, and while these are play chips the lifetime figures on the lobby are not a
+ * joke - a number you did not choose to produce is not a record of anything.
+ *
+ * The gap is the pause between one set of reels settling and the next launching. Without
+ * it the machine reads as one continuous blur rather than as a run of separate spins, and
+ * a win in the middle of it goes by without ever being still long enough to see.
+ */
+const AUTO_COUNTS = [10, 25, 50, 100] as const;
+const AUTO_GAP_MS = 480;
+
 /** A still screen for a cabinet nobody has spun yet - its own symbols, not another's. */
 const blankGrid = (machine: SlotMachine): string[][] =>
   Array.from({ length: ROWS }, (_, row) =>
@@ -85,6 +100,8 @@ export function SlotsGame({
    * were about to answer.
    */
   const [landed, setLanded] = useState(true);
+  /** Spins still owed by auto-spin. Zero means the machine is under hand control. */
+  const [autoLeft, setAutoLeft] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
@@ -107,8 +124,17 @@ export function SlotsGame({
     return () => window.clearTimeout(id);
   }, [spinKey]);
 
+  /*
+   * The guard used to also refuse when `bet < lineCount`.
+   *
+   * That was never right - a stake under the line count is legal, it just buys each line
+   * a fraction of a chip, which is what the warning below the stake is for - and the spin
+   * button did not know about it, so clicking Spin at a bet of 1 on a twenty-line cabinet
+   * silently did nothing. Auto-spin is what turned a puzzling no-op into a real fault: the
+   * loop would have burned its whole count on spins that never happened.
+   */
   const spin = async (): Promise<void> => {
-    if (spinning || bet > balance || bet < lineCount) return;
+    if (spinning || bet > balance || bet < 1) return;
     setSpinning(true);
     setWaiting(true);
     setLanded(false);
@@ -171,8 +197,39 @@ export function SlotsGame({
       setSpinning(false);
       setWaiting(false);
       setLanded(true);
+      // A run that has started failing is a run that should stop, not one that should
+      // keep asking. Whatever went wrong will go wrong ninety-nine more times.
+      setAutoLeft(0);
     }
   };
+
+  /*
+   * The auto-spin loop.
+   *
+   * Written as an effect watching `spinning` rather than as a chain hung off the end of
+   * `spin`, because every way this stops - the count running out, the Stop button, the
+   * balance running dry, an error, leaving the screen - is then a change of state rather
+   * than a flag some callback has to remember to check. The machine spins when it is
+   * idle and something is owed; there is no other rule.
+   *
+   * Nothing here decides an outcome. It presses the same button the player would.
+   */
+  useEffect(() => {
+    if (autoLeft <= 0 || spinning) return;
+    if (bet > balance || bet < 1) {
+      setAutoLeft(0);
+      setError('Auto-spin stopped — not enough chips for the next spin.');
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setAutoLeft((left) => left - 1);
+      void spin();
+    }, AUTO_GAP_MS);
+    return () => window.clearTimeout(id);
+    // `spin` is re-created every render and is not a meaningful dependency; what this
+    // watches is whether the machine is free and whether it still owes a spin.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLeft, spinning, bet, balance]);
 
   /*
    * The cabinet the *round* used, not the one the picker shows.
@@ -204,6 +261,15 @@ export function SlotsGame({
     }
   }
 
+  /*
+   * Locked for the whole of an automatic run, not just for each spin inside it.
+   *
+   * `spinning` drops to false in the gap between two automatic spins, and gating the
+   * stake and the cabinet picker on that alone made both flicker back to life twice a
+   * second for the length of a hundred-spin run.
+   */
+  const locked = spinning || autoLeft > 0;
+
   const freeSpinsLeft = detail ? Math.max(0, detail.spins.length - 1 - shown) : 0;
   const won = landed && current !== undefined && current.units > 0;
 
@@ -218,7 +284,7 @@ export function SlotsGame({
       balance={balance}
       bet={bet}
       onBetChange={setBet}
-      disabled={spinning}
+      disabled={locked}
       onBack={onBack}
       history={history}
       onTopUp={transport.topUp ? () => void transport.topUp?.().then(onBalance) : undefined}
@@ -315,7 +381,7 @@ export function SlotsGame({
                   className={`cabinet${cabinet === option.id ? ' is-active' : ''}`}
                   style={{ '--cabinet-accent': option.accent } as React.CSSProperties}
                   onClick={() => setCabinet(option.id)}
-                  disabled={spinning}
+                  disabled={locked}
                 >
                   <span className="cabinet__name">{option.name}</span>
                   <span className="cabinet__blurb">{option.blurb}</span>
@@ -340,15 +406,48 @@ export function SlotsGame({
             </p>
           )}
 
+          <fieldset className="slots__set">
+            <legend>Auto-spin</legend>
+            <div className="slots__autos">
+              {AUTO_COUNTS.map((count) => (
+                <button
+                  key={count}
+                  className="chip-btn"
+                  onClick={() => setAutoLeft(count)}
+                  disabled={autoLeft > 0 || bet > balance || bet < 1}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
           {error && <p className="slots__error">{error}</p>}
 
-          <button
-            className="btn btn--primary slots__spin"
-            onClick={() => void spin()}
-            disabled={spinning || bet > balance || bet < 1}
-          >
-            {spinning ? 'Spinning…' : 'Spin'}
-          </button>
+          {/*
+            * One button, because there is only ever one thing to do to a machine.
+            *
+            * While a run is going it stops it, and it stays enabled to do that even
+            * though the reels are turning - a stop you have to wait for is not a stop.
+            * The current spin still finishes; what stops is the machine asking for
+            * another one.
+            */}
+          {autoLeft > 0 ? (
+            <button
+              className="btn btn--ghost slots__spin"
+              onClick={() => setAutoLeft(0)}
+            >
+              Stop — {autoLeft} left
+            </button>
+          ) : (
+            <button
+              className="btn btn--primary slots__spin"
+              onClick={() => void spin()}
+              disabled={spinning || bet > balance || bet < 1}
+            >
+              {spinning ? 'Spinning…' : 'Spin'}
+            </button>
+          )}
 
           <details className="slots__paytable">
             <summary>Paytable</summary>

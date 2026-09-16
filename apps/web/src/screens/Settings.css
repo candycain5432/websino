@@ -1,0 +1,161 @@
+/**
+ * The settings screen.
+ *
+ * The one place in the app whose colours are *not* all tokens: each room card has to be
+ * painted in the theme it offers, not in the theme currently on. That is what the three
+ * `--room-*` custom properties are - a palette passed in from the option being drawn, so
+ * the card shows what you would get rather than what you already have.
+ */
+
+.settings {
+  max-inline-size: 960px;
+  margin-inline: auto;
+  padding: var(--space-5) var(--space-5) var(--space-8);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+}
+
+.settings__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.settings__back {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  transition: color var(--dur), background var(--dur);
+}
+.settings__back:hover { color: var(--text); background: var(--panel-light); }
+
+.settings__here {
+  flex: 1;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-muted);
+}
+
+.settings__balance {
+  background: var(--gold-leaf);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-size: var(--text-lg);
+  font-weight: 750;
+}
+
+.settings__section { display: grid; gap: var(--space-3); }
+
+.settings__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  color: var(--gold);
+}
+
+.settings__note { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+.settings__error { margin: 0; color: var(--lose); font-size: var(--text-sm); }
+
+.settings__footer {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-align: center;
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--panel-edge);
+}
+
+/* ------------------------------------------------------------------ a room -- */
+
+.settings__rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3);
+}
+
+.settings__rooms > li { display: grid; min-inline-size: 0; }
+
+.room {
+  display: grid;
+  gap: 2px;
+  inline-size: 100%;
+  padding: 0 0 var(--space-3);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  text-align: start;
+  overflow: hidden;
+  transition:
+    transform var(--dur) var(--ease-out-cubic),
+    border-color var(--dur),
+    box-shadow var(--dur);
+}
+
+.room:hover:not(:disabled) { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.room:disabled { opacity: 0.6; cursor: default; }
+
+/* The one that is on gets the metal of the room it is offering, not of the room you are in. */
+.room.is-on {
+  border-color: var(--room-metal);
+  box-shadow: 0 0 0 1px var(--room-metal), var(--shadow);
+}
+
+/* The page, with a table on it and a rule of metal across the table. */
+.room__scene {
+  position: relative;
+  display: block;
+  block-size: 92px;
+  margin-block-end: var(--space-3);
+  background: radial-gradient(120% 130% at 50% -20%,
+    color-mix(in srgb, var(--room-felt) 40%, var(--room-deep)) 0%, var(--room-deep) 70%);
+}
+
+.room__felt {
+  position: absolute;
+  inset: 16px 14px 0;
+  border-radius: 999px 999px 0 0 / 60px 60px 0 0;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--room-felt) 130%, #fff) 0%,
+    var(--room-felt) 45%,
+    color-mix(in srgb, var(--room-felt) 62%, #000) 100%);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--room-metal) 45%, transparent);
+}
+
+.room__metal {
+  position: absolute;
+  inset-block-end: 22px;
+  inset-inline: 34px;
+  block-size: 3px;
+  border-radius: 999px;
+  background: var(--room-metal);
+  box-shadow: 0 0 12px var(--room-metal);
+}
+
+.room__name {
+  padding-inline: var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  color: var(--text);
+}
+
+.room__blurb {
+  padding-inline: var(--space-3);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room:hover:not(:disabled) { transform: none; }
+}
+
+@media (width <= 40rem) {
+  .settings { padding-inline: var(--space-4); }
+  .settings__rooms { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}

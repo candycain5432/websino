@@ -140,7 +140,7 @@
   background-clip: text;
   color: transparent;
   /* The glow sits behind the letterforms; `background-clip: text` cannot cast one. */
-  filter: drop-shadow(0 0 26px rgb(212 175 55 / 22%));
+  filter: drop-shadow(0 0 26px color-mix(in srgb, var(--gold) 22%, transparent));
   animation: lobby-sheen 7s ease-in-out infinite;
 }
 
@@ -252,7 +252,17 @@
   border: 0;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: linear-gradient(170deg, #142219 0%, #0a1310 100%);
+  /*
+   * The ground a slab sits on, in tokens.
+   *
+   * This was a pair of literal greens, which was invisible until there were five themes
+   * and then very visible: the whole floor stayed forest-green inside a graphite page.
+   * Mixing from `--felt` rather than using `--panel` directly keeps the slab reading as a
+   * piece of the room's table rather than as another panel.
+   */
+  background: linear-gradient(170deg,
+    color-mix(in srgb, var(--felt) 22%, var(--bg-raised)) 0%,
+    var(--bg-deep) 100%);
   box-shadow: var(--shadow-sm);
   text-align: start;
   /* The art is scaled inside; this keeps the rounded corners doing the clipping. */
@@ -271,9 +281,9 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(0deg,
-    rgb(5 10 8 / 92%) 0%,
-    rgb(5 10 8 / 70%) 26%,
-    rgb(5 10 8 / 10%) 52%,
+    color-mix(in srgb, var(--bg-deep) 92%, transparent) 0%,
+    color-mix(in srgb, var(--bg-deep) 74%, transparent) 26%,
+    color-mix(in srgb, var(--bg-deep) 14%, transparent) 52%,
     transparent 72%);
   transition: opacity var(--dur);
 }
@@ -313,7 +323,7 @@
   padding: 2px var(--space-2);
   border: 1px solid color-mix(in srgb, var(--tile-accent) 40%, transparent);
   border-radius: var(--radius-pill);
-  background: rgb(5 10 8 / 62%);
+  background: color-mix(in srgb, var(--bg-deep) 66%, transparent);
   color: var(--tile-accent);
   font-size: var(--text-xs);
   font-weight: 650;

@@ -119,7 +119,8 @@
   font-size: var(--text-xs);
   letter-spacing: 0.18em;
   font-weight: 700;
-  color: #6b6d66;
+  /* Ink on a physical ball, not page text - but the ball is silver, so it follows it. */
+  color: color-mix(in srgb, var(--silver) 45%, #000);
 }
 
 .caller__number {

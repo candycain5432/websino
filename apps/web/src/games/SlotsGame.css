@@ -509,3 +509,8 @@
 .cabinet__name { font-size: var(--text-sm); font-weight: 600; }
 .cabinet__blurb { font-size: var(--text-xs); color: var(--text-muted); }
 .cabinet__rtp { font-size: var(--text-xs); color: var(--text-dim); }
+
+/* ---------------------------------------------------------------- auto-spin -- */
+
+.slots__autos { display: flex; gap: var(--space-2); }
+.slots__autos .chip-btn { flex: 1; text-align: center; }

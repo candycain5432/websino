@@ -22,7 +22,8 @@ import { randomUUID } from 'node:crypto';
 import { createCasualSource } from '@websino/fair';
 import {
   assertValidBet, blackjack, crash, hilo, holdem, mines, shuffleShoe, towers, videopoker,
-  type BlackjackView, type CrashView, type HoldemSeatView, type HoldemView,
+  type BlackjackView, type CrashView, type HoldemSeatView, type HoldemSnapshot,
+  type HoldemView,
   type HiLoView, type MinesView, type ShoeState, type TowersView, type VideoPokerView,
 } from '@websino/engine';
 
@@ -859,7 +860,9 @@ export const HOLDEM_BOT_STACK = 2_000;
  * with the network tab open play perfectly, so the redaction lives here rather than in
  * the client.
  */
-function holdemView(db: Db, userId: string, row: SessionRow, state: HoldemState): HoldemView {
+function holdemSnapshot(
+  db: Db, userId: string, row: SessionRow, state: HoldemState,
+): HoldemSnapshot {
   const t = state.table;
   const seed = db
     .prepare('SELECT server_seed_hash FROM seed_pairs WHERE id = ?')
@@ -924,20 +927,40 @@ function holdemView(db: Db, userId: string, row: SessionRow, state: HoldemState)
   };
 }
 
+/** A snapshot plus the trail of states the bots moved through to reach it. */
+function holdemView(
+  db: Db,
+  userId: string,
+  row: SessionRow,
+  state: HoldemState,
+  steps: HoldemSnapshot[] = [],
+): HoldemView {
+  return { ...holdemSnapshot(db, userId, row, state), steps };
+}
+
 /**
  * Let the bots act until it is the human's turn again, or the hand ends.
  *
  * Bounded rather than `while (true)`: a bug that stopped advancing the table would
  * otherwise hang the request thread rather than fail.
+ *
+ * Returns a frame taken *before* each bot acts - so the first is the table as the
+ * caller's own action left it, and the last is the table with one seat still to move.
+ * Together with the view built afterwards that is every state the table was in, each
+ * exactly once, which is what lets the client walk the street a seat at a time. Taking
+ * them after each action instead would duplicate the final state and spend a pause
+ * arriving somewhere it already was.
  */
-function runBots(state: HoldemState): void {
+function runBots(state: HoldemState, frame: () => HoldemSnapshot): HoldemSnapshot[] {
   const random = createCasualSource(state.botSeed);
   // Advance the seed so the next request's bots do not replay the same decisions.
   state.botSeed = (state.botSeed * 1_103_515_245 + 12_345) >>> 0;
 
+  const steps: HoldemSnapshot[] = [];
   for (let guard = 0; guard < 200; guard += 1) {
     const t = state.table;
-    if (holdem.isHandOver(t) || t.toAct === null || t.toAct === state.you) return;
+    if (holdem.isHandOver(t) || t.toAct === null || t.toAct === state.you) return steps;
+    steps.push(frame());
     holdem.playBotTurn(t, random);
   }
   throw new Error("hold'em table failed to settle");
@@ -966,12 +989,17 @@ export function sitHoldem(db: Db, userId: string, buyIn: number): HoldemView {
     buyIn,
     botSeed,
   };
-  // The shuffle for the first hand comes off the fair stream taken above.
-  holdem.dealHand(state.table, stream);
-  runBots(state);
-
   const id = randomUUID();
   const now = Date.now();
+  const row: SessionRow = {
+    id, game: 'holdem', state_json: '', seed_pair_id: seedPairId, nonce,
+    staked: buyIn, started_at: now,
+  };
+
+  // The shuffle for the first hand comes off the fair stream taken above.
+  holdem.dealHand(state.table, stream);
+  const steps = runBots(state, () => holdemSnapshot(db, userId, row, state));
+
   applyLedger(db, userId, [{ delta: -buyIn, reason: 'wager' }]);
   db.prepare(
     `INSERT INTO game_sessions (id, user_id, game, state_json, seed_pair_id, nonce,
@@ -979,11 +1007,7 @@ export function sitHoldem(db: Db, userId: string, buyIn: number): HoldemView {
      VALUES (?, ?, 'holdem', ?, ?, ?, ?, ?, ?)`,
   ).run(id, userId, JSON.stringify(state), seedPairId, nonce, buyIn, now, now);
 
-  return holdemView(
-    db, userId,
-    { id, game: 'holdem', state_json: '', seed_pair_id: seedPairId, nonce, staked: buyIn, started_at: now },
-    state,
-  );
+  return holdemView(db, userId, row, state, steps);
 }
 
 export function actHoldem(
@@ -996,9 +1020,9 @@ export function actHoldem(
   if (state.table.toAct !== state.you) throw new SessionConflictError('it is not your turn');
 
   holdem.act(state.table, action, amount);
-  runBots(state);
+  const steps = runBots(state, () => holdemSnapshot(db, userId, row, state));
   saveState(db, row.id, state);
-  return holdemView(db, userId, row, state);
+  return holdemView(db, userId, row, state, steps);
 }
 
 export function dealHoldem(db: Db, userId: string): HoldemView {
@@ -1011,15 +1035,14 @@ export function dealHoldem(db: Db, userId: string): HoldemView {
   // A new hand is a new shuffle, so it takes a new nonce - and that is what makes each
   // hand independently verifiable rather than one long stream nobody can check.
   const { stream, seedPairId, nonce } = takeStream(db, userId);
+  const dealt: SessionRow = { ...row, seed_pair_id: seedPairId, nonce };
   holdem.dealHand(state.table, stream);
-  runBots(state);
+  const steps = runBots(state, () => holdemSnapshot(db, userId, dealt, state));
 
   db.prepare('UPDATE game_sessions SET seed_pair_id = ?, nonce = ?, state_json = ?, updated_at = ? WHERE id = ?')
     .run(seedPairId, nonce, JSON.stringify(state), Date.now(), row.id);
 
-  return holdemView(
-    db, userId, { ...row, seed_pair_id: seedPairId, nonce }, state,
-  );
+  return holdemView(db, userId, dealt, state, steps);
 }
 
 /**

@@ -134,6 +134,12 @@ export function Lobby({
               Top up
             </button>
           )}
+          <button
+            className="btn btn--ghost lobby__action"
+            onClick={() => onOpen('settings')}
+          >
+            Settings
+          </button>
           {onSignOut && (
             <button className="btn btn--ghost lobby__action" onClick={onSignOut}>
               {practice ? 'Sign in' : 'Sign out'}

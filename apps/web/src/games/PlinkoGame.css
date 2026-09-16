@@ -26,6 +26,22 @@
  */
 .plinko__pegs {
   position: relative;
+  /*
+   * The width is stated, not inferred.
+   *
+   * `aspect-ratio` transfers a size in whichever direction is left over, and with the
+   * width set to `auto` a `max-block-size` that bites transfers *backwards*: the capped
+   * height shrank the width to keep the ratio, so on a short viewport the peg triangle
+   * came out narrower than the bucket row under it and - having nothing to centre it -
+   * sat against the left edge. Every peg was then drawn at the right fraction of the
+   * wrong box, which is the worst kind of offset: the arithmetic is correct and the
+   * result is visibly wrong.
+   *
+   * With the width definite the ratio only ever transfers width to height, and the cap
+   * squashes the triangle vertically on a short window instead of narrowing it - which is
+   * what it was there to do.
+   */
+  inline-size: 100%;
   aspect-ratio: 5 / 4;
   max-block-size: 46vh;
 }
