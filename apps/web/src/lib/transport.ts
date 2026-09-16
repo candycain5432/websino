@@ -8,12 +8,14 @@
  */
 
 import type {
-  blackjack, BlackjackView, CrashView, hilo, HiLoView, holdem, HoldemView, MinesView,
+  blackjack, BlackjackView, CrashView, hilo, HiLoView, holdem, HoldemSnapshot, HoldemView, MinesView,
   towers, TowersView, VideoPokerView,
 } from '@websino/engine';
 
+import type { ThemeId } from './theme.js';
+
 export type BlackjackAction = blackjack.Action;
-export type { BlackjackView, CrashView, HiLoView, HoldemView, MinesView, TowersView, VideoPokerView };
+export type { BlackjackView, CrashView, HiLoView, HoldemSnapshot, HoldemView, MinesView, TowersView, VideoPokerView };
 export type HiLoGuess = hilo.HiLoGuess;
 export type TowersDifficulty = towers.Difficulty;
 export type HoldemAction = holdem.HoldemAction;
@@ -137,9 +139,30 @@ export interface HoldemApi {
   leave(): Promise<{ balance: number; cashedOut: number }>;
 }
 
+/**
+ * What the player has chosen about how the site looks and behaves.
+ *
+ * One field today. It is an object rather than a bare theme so that adding the next
+ * preference is a field rather than a second pair of endpoints, and so the read and the
+ * write have the same shape - a `setSettings` that took a theme and returned settings
+ * would be the kind of asymmetry that grows a second one.
+ */
+export interface Settings {
+  theme: ThemeId;
+}
+
 export interface GameTransport {
   readonly mode: PlayMode;
   getBalance(): Promise<number>;
+  /**
+   * The account's settings, or this browser's if there is no account.
+   *
+   * Both transports implement it, which is what lets the settings screen be one screen:
+   * it asks the transport, and whether that lands in SQLite or in `localStorage` is the
+   * transport's business and nobody else's.
+   */
+  getSettings(): Promise<Settings>;
+  setSettings(patch: Partial<Settings>): Promise<Settings>;
   getStats(): Promise<PlayerStats>;
   play(request: PlayRequest): Promise<PlayResponse>;
   getFairness(): Promise<FairnessState>;

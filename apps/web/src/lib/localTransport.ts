@@ -12,16 +12,18 @@ import {
   blackjack, crash, dice, hilo, holdem, limbo, mines, plinko, roulette, shuffleShoe,
   slots, towers, videopoker, wheel,
   type BlackjackView, type CrashView, type HiLoView, type HoldemSeatView,
-  type HoldemView, type MinesView, type ShoeState, type TowersView,
+  type HoldemSnapshot, type HoldemView, type MinesView, type ShoeState, type TowersView,
   type VideoPokerView,
 } from '@websino/engine';
 import type { RoundGame } from '@websino/engine';
 
 import type {
   BlackjackAction, BlackjackApi, CrashApi, FairnessState, GameTransport, HiLoApi,
-  HiLoGuess, HoldemAction, HoldemApi, MinesApi, PlayerStats, PlayRequest, PlayResponse, TowersApi,
-  TowersDifficulty, VideoPokerApi,
+  HiLoGuess, HoldemAction, HoldemApi, MinesApi, PlayerStats, PlayRequest, PlayResponse,
+  Settings, TowersApi, TowersDifficulty, VideoPokerApi,
 } from './transport.js';
+
+import { applyTheme, cachedTheme } from './theme.js';
 
 const WALLET_KEY = 'websino.practice.wallet.v1';
 const STATS_KEY = 'websino.practice.stats.v1';
@@ -642,7 +644,7 @@ export class LocalTransport implements GameTransport {
     },
   };
 
-  #holdemView(): HoldemView {
+  #holdemSnapshot(): HoldemSnapshot {
     const entry = this.#tables.holdem;
     if (!entry) throw new Error('no hold em table');
     const t = entry.table;
@@ -703,16 +705,29 @@ export class LocalTransport implements GameTransport {
     };
   }
 
-  /** Bots act until it is the human's turn again, or the hand ends. */
-  #runBots(): void {
+  /** A snapshot plus the trail of states the bots moved through to reach it. */
+  #holdemView(steps: HoldemSnapshot[] = []): HoldemView {
+    return { ...this.#holdemSnapshot(), steps };
+  }
+
+  /**
+   * Bots act until it is the human's turn again, or the hand ends.
+   *
+   * Returns a frame taken *before* each bot acts, exactly as the server does - see the
+   * comment on `runBots` there. The two have to agree, because the screen that plays
+   * these out is the same screen either way and it cannot tell which transport it is on.
+   */
+  #runBots(): HoldemSnapshot[] {
     const entry = this.#tables.holdem;
-    if (!entry) return;
+    if (!entry) return [];
     const random = createCasualSource(entry.botSeed);
     entry.botSeed = (entry.botSeed * 1_103_515_245 + 12_345) >>> 0;
 
+    const steps: HoldemSnapshot[] = [];
     for (let guard = 0; guard < 200; guard += 1) {
       const t = entry.table;
-      if (holdem.isHandOver(t) || t.toAct === null || t.toAct === entry.you) return;
+      if (holdem.isHandOver(t) || t.toAct === null || t.toAct === entry.you) return steps;
+      steps.push(this.#holdemSnapshot());
       holdem.playBotTurn(t, random);
     }
     throw new Error('hold em table failed to settle');
@@ -739,9 +754,9 @@ export class LocalTransport implements GameTransport {
         nonce,
       };
       holdem.dealHand(this.#tables.holdem.table, stream);
-      this.#runBots();
+      const steps = this.#runBots();
       this.#persist();
-      return this.#holdemView();
+      return this.#holdemView(steps);
     },
 
     deal: async (): Promise<HoldemView> => {
@@ -754,9 +769,9 @@ export class LocalTransport implements GameTransport {
       const { stream, nonce } = this.#takeStream();
       entry.nonce = nonce;
       holdem.dealHand(entry.table, stream);
-      this.#runBots();
+      const steps = this.#runBots();
       this.#persist();
-      return this.#holdemView();
+      return this.#holdemView(steps);
     },
 
     act: async (action: HoldemAction, amount: number): Promise<HoldemView> => {
@@ -764,9 +779,9 @@ export class LocalTransport implements GameTransport {
       if (!entry) throw new Error('no hold em table');
       if (entry.table.toAct !== entry.you) throw new Error('it is not your turn');
       holdem.act(entry.table, action, amount);
-      this.#runBots();
+      const steps = this.#runBots();
       this.#persist();
-      return this.#holdemView();
+      return this.#holdemView(steps);
     },
 
     leave: async (): Promise<{ balance: number; cashedOut: number }> => {
@@ -783,6 +798,23 @@ export class LocalTransport implements GameTransport {
 
   async getBalance(): Promise<number> {
     return this.#balance;
+  }
+
+  /*
+   * Practice mode has no account, so the browser is the only place to keep this.
+   *
+   * `applyTheme` is what writes the cache, and it is already called by whoever changes
+   * the theme - so there is deliberately nothing to write here. Reading and writing the
+   * same key from two modules is how the two end up disagreeing about the format.
+   */
+  async getSettings(): Promise<Settings> {
+    return { theme: cachedTheme() };
+  }
+
+  async setSettings(patch: Partial<Settings>): Promise<Settings> {
+    const next: Settings = { theme: patch.theme ?? cachedTheme() };
+    applyTheme(next.theme);
+    return next;
   }
 
   async getStats(): Promise<PlayerStats> {

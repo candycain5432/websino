@@ -180,7 +180,14 @@ export interface HoldemSeatView {
   handDescription?: string | null;
 }
 
-export interface HoldemView {
+/**
+ * The bots table at one instant.
+ *
+ * Split out of `HoldemView` so that a view can carry a trail of earlier instants without
+ * each of those being able to carry a trail of its own. The nesting is one level deep by
+ * construction rather than by convention, which is the only way to keep it that way.
+ */
+export interface HoldemSnapshot {
   street: string;
   board: Card[];
   pot: number;
@@ -206,6 +213,27 @@ export interface HoldemView {
   } | null;
   balance: number;
   proof: { serverSeedHash: string; nonce: number };
+}
+
+/**
+ * Where the table ended up, and every instant it passed through getting there.
+ *
+ * A request to this table - sitting down, dealing, acting - can move several seats: the
+ * bots between you and your next turn all act before the server answers. Returning only
+ * the final state meant a whole street resolved in one frame, so three decisions that
+ * each mattered arrived as a single jump in the pot.
+ *
+ * `steps` is every state between the request and this one, oldest first, one per bot
+ * action. The client plays them out on a timer with a pause between them. It is
+ * presentation and nothing else: the table is already at `this` state on the server
+ * before the first frame is drawn, the pause is chosen by the client, and a client that
+ * ignores `steps` entirely sees exactly what it saw before - which is what the tests and
+ * the headless harnesses do.
+ *
+ * Empty when the request moved nobody but you.
+ */
+export interface HoldemView extends HoldemSnapshot {
+  steps: HoldemSnapshot[];
 }
 
 // -------------------------------------------------------------- shared tables --

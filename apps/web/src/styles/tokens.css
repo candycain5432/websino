@@ -123,9 +123,18 @@
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
   --shadow: 0 4px 12px rgb(0 0 0 / 45%), 0 1px 2px rgb(0 0 0 / 30%);
   --shadow-lg: 0 12px 32px rgb(0 0 0 / 55%), 0 2px 6px rgb(0 0 0 / 35%);
-  --glow-gold: 0 0 24px rgb(212 175 55 / 28%);
-  --glow-win: 0 0 28px rgb(94 200 120 / 35%);
-  --glow-lose: 0 0 28px rgb(226 74 68 / 30%);
+  /*
+   * Mixed from the token, not written out again.
+   *
+   * These three were literal `rgb()` copies of `--gold`, `--win` and `--lose`, which was
+   * fine while there was one palette. It stopped being fine the moment there were five:
+   * a theme could re-point the accent and the glow around it would stay the old gold, so
+   * the neon room's buttons had a warm halo nothing else on the page shared. Deriving
+   * them means a theme only ever has to state its colours.
+   */
+  --glow-gold: 0 0 24px color-mix(in srgb, var(--gold) 28%, transparent);
+  --glow-win: 0 0 28px color-mix(in srgb, var(--win) 35%, transparent);
+  --glow-lose: 0 0 28px color-mix(in srgb, var(--lose) 30%, transparent);
 
   /*
    * A lit edge.

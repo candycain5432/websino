@@ -1,12 +1,48 @@
-import type { Card, HoldemView } from '@websino/engine';
+import type { Card, HoldemSnapshot, HoldemView } from '@websino/engine';
 import { useEffect, useRef, useState } from 'react';
 
 import { GameShell, type HistoryEntry } from '../components/GameShell.js';
 import { PlayingCard } from '../components/PlayingCard.js';
-import { actionTone } from '../lib/actionTone.js';
+import { actionTone, type ActionTone } from '../lib/actionTone.js';
 import { formatChips } from '../lib/format.js';
 import type { GameTransport, HoldemAction } from '../lib/transport.js';
 import './HoldemGame.css';
+
+/**
+ * How long a bot appears to think, by what it decided.
+ *
+ * The server resolves every bot between your turns in one loop, so a whole street used to
+ * arrive in a single frame: three decisions that each mattered showed up as one jump in
+ * the pot, with only the log to say what had happened. The table now walks through the
+ * states the server passed through, a seat at a time.
+ *
+ * The pause is drawn from a range rather than fixed, because three seats pausing for
+ * identically 900ms reads as a machine ticking rather than as people playing. And the
+ * range depends on the decision: folding is instant in a way that raising is not, so a
+ * long pause followed by a raise carries the same weight at this table that it does at a
+ * real one. It is theatre - the decision was made before the first frame was drawn - but
+ * it is theatre that tells the truth about what happened.
+ */
+const THINK_MS: Record<ActionTone, readonly [number, number]> = {
+  fold: [380, 760],
+  passive: [620, 1_180],
+  aggressive: [980, 1_850],
+  allin: [1_250, 2_100],
+  neutral: [560, 980],
+};
+
+/** A street turning over is worth a beat of its own, on top of the actor's think. */
+const STREET_MS = 520;
+
+function thinkTime(before: HoldemSnapshot, after: HoldemSnapshot): number {
+  const seat = before.toAct;
+  const label = seat === null
+    ? ''
+    : after.seats.find((s) => s.seat === seat)?.lastAction ?? '';
+  const [low, high] = THINK_MS[actionTone(label)];
+  const board = after.board.length > before.board.length ? STREET_MS : 0;
+  return low + Math.random() * (high - low) + board;
+}
 
 const STREET_LABELS: Record<string, string> = {
   preflop: 'Pre-flop', flop: 'Flop', turn: 'Turn', river: 'River', complete: 'Hand over',
@@ -31,7 +67,16 @@ export function HoldemGame({
   onBack: () => void;
 }) {
   const [buyIn, setBuyIn] = useState(500);
-  const [view, setView] = useState<HoldemView | null>(null);
+  /**
+   * The table as it is being *shown*, which during a playback is behind the server.
+   *
+   * A `HoldemView` is a `HoldemSnapshot` with a trail attached, so an earlier frame
+   * renders through exactly the same fields - and carries `yourTurn: false`, which is
+   * what stops the controls offering an action against a state the table has already
+   * left. There is deliberately no second copy of the final view held alongside this:
+   * one source for what is on screen is the whole point.
+   */
+  const [view, setView] = useState<HoldemSnapshot | null>(null);
   const [raiseTo, setRaiseTo] = useState(0);
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -61,6 +106,39 @@ export function HoldemGame({
     );
   }, [view]);
 
+  /*
+   * Playback timers, and whether this screen is still on.
+   *
+   * A hand can be mid-playback when the player walks back to the lobby, and the pending
+   * waits have to stop there - both so the table does not keep drawing itself into a
+   * dead component, and so `leave` is not queued behind three seconds of bots thinking.
+   */
+  const timers = useRef<number[]>([]);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+      for (const t of timers.current) window.clearTimeout(t);
+      timers.current = [];
+    };
+  }, []);
+
+  const wait = (ms: number): Promise<void> =>
+    new Promise((resolve) => { timers.current.push(window.setTimeout(resolve, ms)); });
+
+  /** Walk the states the server passed through, then land on the one it ended at. */
+  const play = async (final: HoldemView): Promise<void> => {
+    const frames: HoldemSnapshot[] = [...final.steps, final];
+    for (let i = 0; i < frames.length; i += 1) {
+      const frame = frames[i] as HoldemSnapshot;
+      const previous = frames[i - 1];
+      if (previous) await wait(thinkTime(previous, frame));
+      if (!live.current) return;
+      setView(frame);
+    }
+  };
+
   const run = async (work: () => Promise<HoldemView>): Promise<void> => {
     if (busy) return;
     setBusy(true);
@@ -68,8 +146,16 @@ export function HoldemGame({
     try {
       const next = await work();
       const wasInProgress = view?.handInProgress ?? false;
-      setView(next);
+      /*
+       * The balance is applied now, ahead of the playback.
+       *
+       * Same call made everywhere else on the site: a figure that is briefly ahead of the
+       * table beats one that is briefly wrong, because leaving the screen mid-playback
+       * would otherwise strand a stale number in the header.
+       */
       onBalance(next.balance);
+      await play(next);
+      if (!live.current) return;
 
       // A new hand just started: remember the stack it started from.
       if (next.handInProgress && !wasInProgress) {

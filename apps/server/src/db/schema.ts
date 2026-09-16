@@ -188,6 +188,24 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX bingo_entries_open ON bingo_entries(room_id, round) WHERE payout IS NULL;
     `,
   },
+  {
+    id: 5,
+    name: 'user-settings',
+    sql: `
+      -- How the player has chosen to have the place decorated.
+      --
+      -- A column on users rather than a settings table: there is one preference, it is
+      -- one-to-one with the account, and a key/value table for a single row per user
+      -- buys flexibility nobody has asked for at the cost of a join on every page load.
+      -- When there is a third of these it should become a JSON column, not a table.
+      --
+      -- The default is the empty string rather than a theme name, because the set of
+      -- themes lives in the client and the database has no business having an opinion
+      -- about which ones exist. Empty means "never chosen", and the client reads that
+      -- as its own default.
+      ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 export function migrate(db: Database): void {

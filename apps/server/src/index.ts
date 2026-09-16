@@ -278,6 +278,35 @@ export async function buildServer(db: Db = openDatabase()) {
     };
   });
 
+  /*
+   * ------------------------------------------------------------- settings --
+   *
+   * The server stores the preference and validates nothing about its *meaning*: which
+   * themes exist is a fact about the client build, and a server that kept a list of them
+   * would have to be redeployed to add one. It enforces only that the value is a short,
+   * plain identifier, which is what stops the column becoming a place to park arbitrary
+   * strings.
+   *
+   * An empty string means the player has never chosen, and the client reads that as its
+   * own default - so a new theme shipping as the default needs no migration.
+   */
+  const themeName = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/).or(z.literal(''));
+
+  app.get('/api/me/settings', async (request) => {
+    const user = requireUser(request);
+    const row = db
+      .prepare('SELECT theme FROM users WHERE id = ?')
+      .get(user.id) as { theme: string } | undefined;
+    return { theme: row?.theme ?? '' };
+  });
+
+  app.put('/api/me/settings', async (request) => {
+    const user = requireUser(request);
+    const { theme } = z.object({ theme: themeName }).parse(request.body);
+    db.prepare('UPDATE users SET theme = ? WHERE id = ?').run(theme, user.id);
+    return { theme };
+  });
+
   // ----------------------------------------------------------------- play --
   app.post('/api/round', async (request) => {
     const user = requireUser(request);

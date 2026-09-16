@@ -89,12 +89,24 @@ const afterBj = await readLedger(page);
 console.log('  after a blackjack hand:', JSON.stringify(afterBj));
 check(afterBj['Rounds played'] === '4', `a hand is one round (${afterBj['Rounds played']})`);
 
-// Topping up must not read as profit.
+/*
+ * Topping up must not read as profit - which is a claim about the *change*, not the sign.
+ *
+ * This used to assert that `Net` was not positive after the top-up, and that is a
+ * different claim entirely: four rounds of dice and blackjack leave the player ahead
+ * about as often as behind, so the check failed on luck and passed on luck, which is
+ * worse than not having it. What it is actually for is that ten thousand chips arriving
+ * from the house move `Net` by nothing at all.
+ */
+const netBefore = afterBj['Net'];
 await page.getByRole('button', { name: 'Top up' }).click();
 await page.waitForTimeout(500);
 const afterTop = await readLedger(page);
 console.log('  after a top-up:', JSON.stringify(afterTop));
-check(!afterTop['Net'].startsWith('+'), `topping up is not a win (net ${afterTop['Net']})`);
+check(
+  afterTop['Net'] === netBefore,
+  `topping up left net where it was (${netBefore} -> ${afterTop['Net']})`,
+);
 await page.close();
 
 // ---- house ----

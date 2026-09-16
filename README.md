@@ -110,6 +110,7 @@ reconciles and the lobby's `net` excludes them — cheated chips never read as w
 | **Multiplayer** | Shared hold'em tables and a shared-round bingo hall, over WebSocket |
 | **Accounts** | Username + password, argon2id, server-authoritative chips |
 | **Fairness** | HMAC-SHA256 commit/reveal with an in-app verifier |
+| **Themes** | Five palettes, chosen in Settings and stored on the account |
 | **Offline** | Practice mode with a local wallet; a single-file build that runs from `file://` |
 | **Tests** | 617, covering payout maths, chip conservation and seed secrecy |
 
@@ -162,6 +163,25 @@ rest of the casino.
 It is shown, not hidden — the felt says what the house took — and it is the *only* way
 chips may leave a table. That makes the tested invariant an exact one: chips on the felt
 plus chips the house has taken may only change when somebody sits down or stands up.
+
+**The bots act one at a time.** The server resolves every bot between your turns in a
+single loop, so a whole street used to arrive in one frame: three decisions that each
+mattered showed up as one jump in the pot, with only the log to say what had happened.
+The table now walks through the states the server passed through, a seat at a time — which
+means the server returns them. A `HoldemView` carries the trail of snapshots it moved
+through to get where it is, taken *before* each bot acts, so together with the view itself
+that is every state the table was in, each exactly once.
+
+How long a seat appears to think depends on what it decided: folding is quick in a way
+that raising is not, so a long pause followed by a raise carries the weight here that it
+does at a real table, and a street turning over gets a beat of its own. The pause is drawn
+from a range rather than fixed, because three seats pausing for identically 900ms reads as
+a machine ticking rather than as people playing.
+
+It is theatre — every decision was made before the first frame was drawn — but it is
+theatre that tells the truth about what happened, frame by frame, and a client that
+ignores the trail entirely sees exactly what it saw before. Which is what the tests and
+the headless harnesses do.
 
 ### Shared tables
 
@@ -324,6 +344,20 @@ backwards; there is now a test that catches exactly that.
 The exact-return calculation moved out of the test and into the engine, so a new cabinet
 cannot be added without its economics being knowable. That is the point: a slot's
 economics live entirely in numbers nobody can eyeball.
+
+**Auto-spin takes a count, not a switch.** Ten, twenty-five, fifty or a hundred, and the
+one button that spins the machine becomes the one that stops it — enabled even while the
+reels are turning, because a stop you have to wait for is not a stop. There is no "until I
+stop" option: that is one forgotten tab away from a machine playing a hundred thousand
+rounds against an account nobody is watching, and the lifetime figures on the lobby are
+not a joke. It stops itself early if the balance cannot cover the next spin, or if a spin
+errors — whatever went wrong will go wrong ninety-nine more times.
+
+Adding it turned up a real fault. The spin handler refused to act when the stake was below
+the line count, but the button did not know that, so clicking Spin at a bet of 1 on a
+twenty-line cabinet had silently done nothing since the cabinet was written. A stake under
+the line count is legal — it just buys each line a fraction of a chip — and the warning
+under the stake already says so.
 
 ---
 
@@ -647,6 +681,29 @@ for the thing that decides it to stop moving.
 
 ![The deck](docs/screenshots/deck.png)
 
+![Themes](docs/screenshots/themes.png)
+
+**Five rooms, and the choice follows your account.** Emerald is the house green; Midnight
+Neon is near-black lit in cyan; Red Velvet is crimson cloth, mahogany and brass; Royal is
+indigo trimmed in old silver; Obsidian is graphite and one line of gold. You pick one in
+Settings, and it is stored on the account rather than in the browser, so signing in
+anywhere brings your room with you. Practice mode has no account, so there it stays local
+— the same rule the practice wallet follows.
+
+A theme is about a dozen colour tokens and nothing else. Every surface, material and glow
+in the app is derived from those through `var()` and `color-mix()`, so re-pointing
+`--felt` re-cuts the table's weave, its vignette and its rim without a rule being written
+twice; adding a sixth room is thirty lines. Two things deliberately *do not* change: the
+status colours barely move, because a theme that turned a loss blue to match its palette
+would make the palette more important than the money; and the card faces never change,
+because a red suit has to be red on every table in the building. The same goes for the
+roulette wheel's red, black and green, which belong to the game rather than to the room.
+
+The cached choice is read synchronously before React mounts. Without that, every load
+would paint the default green for a few hundred milliseconds and then snap — and a flash
+of the wrong colour on every page load is worse than not offering themes at all. The
+account is still the authority; it just arrives after the first frame has to be drawn.
+
 Everything is DOM and CSS. Canvas is reserved for the two things that genuinely need
 it — the crash curve and the roulette wheel — because an element can be inspected,
 scaled, animated by the compositor and read aloud by a screen reader, and a bitmap
@@ -739,6 +796,7 @@ node tools/shots/online.mjs       # every game against a real server, asserted i
 node tools/shots/tables.mjs       # two browsers at one shared table
 node tools/shots/bingo.mjs        # two browsers watching one ball sequence
 node tools/shots/stats.mjs        # the lobby's lifetime figures, on both transports
+node tools/shots/theme.mjs        # two browser profiles: the theme follows the account
 
 # The production shape: one origin, no proxy in front. Needs `pnpm build` first, then
 # `NODE_ENV=production PORT=3111 pnpm start`.
@@ -780,7 +838,16 @@ The interesting tests are the invariants, not the line coverage:
   are implemented twice over, so either side could quietly report zero or count a round
   twice and nothing else would notice. The two subtle cases are the point: a blackjack
   hand is *one* round however many times you double, split or insure it, and topping up
-  is not a win.
+  is not a win. That second one was asserted wrongly for a while — it checked that `Net`
+  was not *positive* after a top-up, which four rounds of dice and blackjack decide by
+  luck, so it failed and passed at random. It now checks what it always meant: ten
+  thousand chips from the house move `Net` by nothing at all.
+- **The theme follows the account, not the browser** — the one claim about themes that a
+  screenshot cannot make, and a bug in it would be invisible on the machine you built it
+  on, because that machine has the right value cached. Two separate browser profiles
+  against one server: one picks a room, the other signs in cold with a cache that
+  demonstrably says something else, and has to be wearing the account's choice before it
+  has been near the settings screen.
 - **Card geometry, measured on the real deck** — nothing on a card may escape the card,
   checked across all fifty-two on the `#deck` sheet. It used to build card markup by hand
   inside the browser, and when the component was rewritten that markup stopped matching

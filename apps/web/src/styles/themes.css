@@ -1,0 +1,186 @@
+/**
+ * The rooms this casino can be decorated as.
+ *
+ * Every theme is a handful of colour tokens. Nothing else in the app knows a theme
+ * exists: the depth, the materials and the type are all derived from these through
+ * `var()` and `color-mix()` in `tokens.css`, so re-pointing `--felt` re-cuts the table's
+ * weave, its vignette and its rim without a single rule being written twice. That is the
+ * whole reason this is thirty lines per theme rather than a second stylesheet each.
+ *
+ * **`--gold` is the accent slot, not a colour.** In Midnight it is cyan and in Royal it is
+ * silver-blue. Renaming it across forty files would be a lot of churn for a word, so it
+ * keeps the name it was born with; read it as "the metal this room is trimmed in".
+ *
+ * Two things are deliberately *not* themed:
+ *
+ *   **`--win`, `--lose` and `--push` barely move.** They mean something. A theme that
+ *   turned a loss blue to match its palette would have made the palette more important
+ *   than the money, and a player switching rooms would have to re-learn which colour is
+ *   bad. They shift in temperature to sit in the room and no further.
+ *
+ *   **The card faces never change.** A deck is a physical object that the house does not
+ *   own the colour of, and a red suit has to be red on every table in the building.
+ */
+
+/* ------------------------------------------------------- midnight neon -- */
+
+/*
+ * Cold, electric, almost black. The felt is a deep teal rather than a green, lit by the
+ * accent instead of by warm light, and the rail is gunmetal - there is no wood in this
+ * room. The one thing it must not become is a black background with bright text on it,
+ * which is why the panels stay several steps up from the page.
+ */
+:root[data-theme='midnight'] {
+  --bg-deep: #05070e;
+  --bg-raised: #0b1020;
+  --felt: #10304a;
+  --felt-dark: #061624;
+  --felt-light: #1a5270;
+  --wood: #1c2233;
+  --wood-light: #39415c;
+
+  --panel: #0e1424;
+  --panel-light: #172032;
+  --panel-edge: #2b3750;
+
+  --gold: #2fd8e0;
+  --gold-dim: #17747c;
+  --gold-bright: #a9f6fb;
+  --silver: #b6c4dc;
+
+  --text: #e6edfa;
+  --text-dim: #8fa0be;
+  --text-muted: #5d6b86;
+
+  --win: #40dfa0;
+  --lose: #ff5d7a;
+  --push: #c9a6ff;
+  --info: #4fb2ff;
+  --warn: #ffab4a;
+  --purple: #a077ff;
+
+  --card-back: #17275c;
+  --card-back-dark: #0c1638;
+}
+
+/* ---------------------------------------------------------- red velvet -- */
+
+/*
+ * A private room: crimson velvet, dark mahogany and brass. The trap here is that a red
+ * table under red light has nothing to separate the two, so the felt is pushed towards
+ * carmine while the page behind it goes almost brown, and the accent is brass rather than
+ * gold so it does not fight the cloth.
+ */
+:root[data-theme='velvet'] {
+  --bg-deep: #120507;
+  --bg-raised: #1f0b0e;
+  --felt: #7a1526;
+  --felt-dark: #470a16;
+  --felt-light: #9e2135;
+  --wood: #3a1f14;
+  --wood-light: #5e3423;
+
+  --panel: #220d11;
+  --panel-light: #33161b;
+  --panel-edge: #542830;
+
+  --gold: #e0a94a;
+  --gold-dim: #936b23;
+  --gold-bright: #ffe3a0;
+  --silver: #d8c8c0;
+
+  --text: #f6e9e4;
+  --text-dim: #b79a96;
+  --text-muted: #856866;
+
+  --win: #6fd08a;
+  --lose: #ff6b5e;
+  --push: #e8be5c;
+  --info: #6fa8dc;
+  --warn: #f0973f;
+  --purple: #b183e0;
+
+  --card-back: #1f3a6b;
+  --card-back-dark: #12234a;
+}
+
+/* -------------------------------------------------------------- royal -- */
+
+/*
+ * Deep indigo and old silver - the coolest room in the building, and the only one whose
+ * accent is not a warm metal. Silver on indigo is a narrower contrast than gold on green,
+ * so the panels are lifted further from the page than anywhere else to keep edges legible.
+ */
+:root[data-theme='royal'] {
+  --bg-deep: #090718;
+  --bg-raised: #140f2c;
+  --felt: #2a2470;
+  --felt-dark: #171243;
+  --felt-light: #3d3596;
+  --wood: #241a3c;
+  --wood-light: #433464;
+
+  --panel: #16112e;
+  --panel-light: #221a42;
+  --panel-edge: #3b3068;
+
+  --gold: #c8cfe8;
+  --gold-dim: #6d7596;
+  --gold-bright: #f2f5ff;
+  --silver: #c8cfe8;
+
+  --text: #eceafb;
+  --text-dim: #9d9ac4;
+  --text-muted: #6d6a94;
+
+  --win: #5ed4a0;
+  --lose: #f2607e;
+  --push: #d6b6f0;
+  --info: #7aa9f0;
+  --warn: #efa055;
+  --purple: #a88cf5;
+
+  --card-back: #3a2a66;
+  --card-back-dark: #221740;
+}
+
+/* ----------------------------------------------------------- obsidian -- */
+
+/*
+ * No colour at all except the money. Graphite, charcoal and one line of gold - the room
+ * for somebody who finds the others loud. It is the hardest of the five to get right,
+ * because with the hue gone the only thing separating two surfaces is a step in
+ * lightness, so the steps between page, panel and edge are wider here than anywhere else.
+ */
+:root[data-theme='obsidian'] {
+  --bg-deep: #0a0a0b;
+  --bg-raised: #141416;
+  --felt: #232427;
+  --felt-dark: #131416;
+  --felt-light: #34363b;
+  --wood: #1b1b1d;
+  --wood-light: #3a3a3e;
+
+  --panel: #151517;
+  --panel-light: #232326;
+  --panel-edge: #3b3b40;
+
+  --gold: #d9b871;
+  --gold-dim: #8a7343;
+  --gold-bright: #f6e4b8;
+  --silver: #c2c4c8;
+
+  --text: #f0efec;
+  --text-dim: #9b9b9e;
+  --text-muted: #6a6a6d;
+
+  --win: #62c98a;
+  --lose: #e0554f;
+  --push: #d4b45e;
+  --info: #6fa5cf;
+  --warn: #dd9142;
+  --purple: #9a83cc;
+
+  --card-back: #2a2b2f;
+  --card-back-dark: #17181a;
+}
